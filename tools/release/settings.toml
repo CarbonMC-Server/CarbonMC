@@ -1,0 +1,5 @@
+[release]
+rust_version = "1.98.0"
+python_version = "3.12"
+# Native builds only. gnullvm is for local Windows validation, not the CI release pair.
+targets = ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-gnullvm"]

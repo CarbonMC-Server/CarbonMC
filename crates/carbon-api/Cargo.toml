@@ -1,0 +1,15 @@
+[package]
+name = "carbon-api"
+description = "Public extension API and domain types for Carbon"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,17 @@
+[server]
+bind = "127.0.0.1:25565"
+motd = "A Carbon server"
+max_players = 20
+ticks_per_second = 20
+view_distance = 8
+# Development default: account identities are not authenticated.
+online_mode = false
+# When true, only operators and names in allowlist.json may join.
+allowlist_enabled = false
+
+[logging]
+level = "info"
+
+[world]
+name = "world"
+seed = 0
