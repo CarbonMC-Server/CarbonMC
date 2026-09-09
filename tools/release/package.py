@@ -15,8 +15,9 @@ DOCS = ['README.md', 'LICENSE', 'LICENSE-MIT-HISTORY', 'Carbon.toml', 'OPERATION
         'RELEASE_NOTES.md', 'RELEASE_CHECKLIST.md', 'RELEASE_READINESS.md',
         'SAVE_COMPATIBILITY.md', 'ROADMAP.md', 'REFERENCE_POLICY.md', 'RELEASE_BUILD.md']
 SOURCE_ROOTS = ['crates', 'extensions', '.github', 'tools/release']
+# Agent instructions are local development guidance, not release/build inputs.
 SOURCE_FILES = DOCS + ['Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.gitignore',
-                      '.gitattributes', 'AGENTS.md', 'tools/verify_release_docs.py']
+                      '.gitattributes', 'tools/verify_release_docs.py']
 
 
 def sha(data):

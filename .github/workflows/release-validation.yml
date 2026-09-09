@@ -39,6 +39,7 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as stream:
               stream.write('RUSTUP_TOOLCHAIN=' + toolchain + '\n')
       - run: cargo fmt --all --check
+      - run: cargo check --workspace --all-targets --locked
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
       - run: python -m unittest discover -s tools/release -p "test_*.py" -v

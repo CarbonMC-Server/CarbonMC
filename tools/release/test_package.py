@@ -1,9 +1,10 @@
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 import zipfile
 
-from package import archive, canonical, sha, source_files
+from package import SOURCE_FILES, archive, canonical, sha, source_files
 from smoke import unpack, verify_files
 
 
@@ -24,6 +25,33 @@ class PackageTests(unittest.TestCase):
         for name in files:
             self.assertNotIn(name.split('/')[0], {'server', 'Pumpkin-ref', 'logs', 'target', 'dist', 'work', 'outputs'})
             self.assertFalse(name.startswith('world-save'))
+
+    def test_release_selection_is_independent_of_agent_instructions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in SOURCE_FILES:
+                if name == 'AGENTS.md':
+                    continue
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('release input', encoding='utf-8')
+            with patch('package.ROOT', root):
+                without_guidance = source_files()
+                self.assertNotIn('AGENTS.md', without_guidance)
+                (root / 'AGENTS.md').write_text('local-only guidance', encoding='utf-8')
+                self.assertEqual(source_files(), without_guidance)
+
+    def test_missing_required_build_input_still_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in SOURCE_FILES:
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('release input', encoding='utf-8')
+            (root / 'Cargo.lock').unlink()
+            with patch('package.ROOT', root):
+                with self.assertRaisesRegex(ValueError, 'Unsafe or missing source input: Cargo.lock'):
+                    source_files()
 
     def test_tampering_and_unlisted_files_are_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
