@@ -2,7 +2,7 @@
 
 > Experimental offline development server. Local/trusted networks only; no authenticated identities or production-world guarantees.
 
-The current target is Java 26.2 / protocol 776 with the prototype features in [release notes](RELEASE_NOTES.md). There is no promised vanilla/Paper parity, uptime/SLA, supported player-count benchmark, old-save downgrade converter, or third-party plugin compatibility. Windows local documentation checks are recorded in the checklist; Linux source instructions await platform acceptance. Automated checks do not substitute for a two-client gameplay pass.
+The current target is Java 26.2 / protocol 776 with the prototype features in [release notes](RELEASE_NOTES.md). There is no promised vanilla/Paper parity, uptime/SLA, supported player-count benchmark, old-save downgrade converter, or third-party plugin compatibility. Windows Server 2022 and Ubuntu 22.04 package validation is recorded in [RELEASE_BUILD.md](RELEASE_BUILD.md); wider OS support is not yet established. Automated checks do not substitute for a two-client gameplay pass.
 
 The source repository is [CarbonMC](https://github.com/CarbonMC-Server/CarbonMC). No public support SLA or security contact is designated. Send reports privately to the maintainer through your existing project communication channel; do not post secrets or sensitive saves publicly. A release owner must designate public reporting channels before distribution.
 

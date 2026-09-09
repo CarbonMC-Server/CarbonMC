@@ -1,6 +1,6 @@
 # Reproducible release builds
 
-Gate 2 is in progress. Scripts produce local review artifacts, not an approved public release. Gates 1, 3 and 4 remain separate. Do not distribute embedded fixtures or binaries until the provenance review is complete.
+Gate 2 is complete for the validated developer-preview baseline recorded below. Scripts produce local review artifacts, not an approved public release. Gates 1, 3 and 4 remain separate. Do not distribute embedded fixtures or binaries until the provenance review is complete.
 
 ## Build contract
 
@@ -33,10 +33,18 @@ Extraction must retain Linux executable permissions; the verification helper doe
 
 The release-validation workflow builds Windows/Linux artifacts and checks them on separate fresh hosted jobs with a sanitized runtime PATH. It also builds twice and compares exact archive checksums. It uploads workflow artifacts for review only; it creates no GitHub Release, tag, or publication. Manual dispatch and pull-request validation do not approve redistribution.
 
-Full gate closure requires: reviewed versioned source baseline and real repository metadata; passing Windows and Linux build/reproducibility jobs; passing independent artifact smoke jobs; and recorded run URLs/checksums here. Local checks cannot substitute for remote platform results. This checkout initially had no commits, remote, working Linux installation, or GitHub CLI. The repository owner is supplying the destination.
+Release validation requires a reviewed committed baseline, canonical repository metadata, matching independent-build checksums, and successful package smoke tests on both native platforms. Those checks passed for the baseline below. Future source or toolchain changes must pass the same workflow; a local build alone is insufficient.
 
 ## CI repair after repository transfer — 2026-09-09
 
 Canonical repository: https://github.com/CarbonMC-Server/CarbonMC. Failed run 34133404735 was caused by commit bc8cc90 deleting AGENTS.md while SOURCE_FILES still required it. Both native build jobs failed the source-selection Python test with `Unsafe or missing source input: AGENTS.md`; dependent smoke jobs were correctly skipped. The transfer itself was not the failure: neither workflow hardcodes an owner/repository, uses custom secrets, release upload URLs or badges. Artifact names and target triples match between the build and smoke matrices; contents-read permissions are sufficient for these review workflows.
 
 AGENTS.md is now excluded from release inputs whether present locally or absent. Required source/config/license files still fail closed when missing; regression tests cover both cases. Checksum/rebuild comparisons, strict Clippy, tests, artifact validation and separate smoke jobs remain enabled. Both workflows now explicitly run locked `cargo check` as well. Cargo/support URLs and the local origin remote point to the organization.
+
+## Verified baseline — 2026-09-09
+
+Source: `400067d4da2f25c525e8cc4209b6622ecd0fd80a`. [Release validation run](https://github.com/CarbonMC-Server/CarbonMC/actions/runs/34353608625): all four jobs passed. Windows Server 2022 (`x86_64-pc-windows-msvc`) and Ubuntu 22.04 (`x86_64-unknown-linux-gnu`) each passed locked Cargo check/tests, strict Clippy, formatting, seven package regression tests, two independent release builds and exact archive checksum comparison. Separate fresh jobs downloaded the artifacts and passed launcher/configuration, clean stop, restart and recovery checks with the compiler toolchain removed from the child process PATH. Normal CI passed in run 34353608555.
+
+Download the workflow artifacts for the binary/source ZIPs and SHA256SUMS; each binary archive also contains FILES.sha256 and build/source manifests. These are validated review artifacts, not a published GitHub Release. Validation establishes these runner platforms, not every Windows/Linux version or production readiness.
+
+The regression fixtures also resolve their temporary root to match production path handling, avoiding Windows short-path aliases being mistaken for paths outside the source root. The production containment check was not relaxed.

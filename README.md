@@ -6,7 +6,7 @@ Carbon is an experimental Minecraft server platform written in stable Rust. Its 
 
 Carbon is pinned to Java Edition 26.2 rather than echoing whichever protocol contacts it. A 26.2 client reaches the login parser; other versions receive an explicit mismatch. The protocol number comes from `version.json` embedded in Mojang's official 26.2 server jar. Carbon does not bundle that jar or copy its implementation.
 
-Review package build/checksum instructions: [RELEASE_BUILD.md](RELEASE_BUILD.md). Windows/Linux release acceptance is still pending; generated artifacts are not automatically published.
+Review package build/checksum instructions: [RELEASE_BUILD.md](RELEASE_BUILD.md). Windows/Linux builds, independent rebuild comparisons and package smoke checks pass. Other release gates remain open; review artifacts are not automatically published.
 
 ## Preview documentation
 

@@ -20,7 +20,7 @@ Back up the complete stopped data directory, configuration, and old binary indep
 - No production durability guarantee, chunk/region persistence, historical generators, multi-writer exclusion, or comprehensive persistence fuzzing. A backup is one rotating generation; separate snapshots are necessary.
 - No full vanilla terrain, fluid simulation, falling-block physics, End progression, redstone/gameplay parity, or complete specialized containers. Lava has contact/burn damage and lighting but no flow or full fire/extinguishing behavior.
 - Remote skins, combat/animation parity, performance/soak limits, and a recorded two-client acceptance pass remain incomplete. The default player capacity is a setting, not a tested capacity guarantee.
-- Linux packaging/fresh-machine installation, distribution provenance clearance, and a reviewed tagged baseline remain open. A locally verified Windows staging folder is not a published package.
+- Windows/Linux build and package smoke validation passed on the recorded hosted runner platforms. Wider OS acceptance, distribution provenance clearance and a published tagged release remain open. Workflow artifacts are review packages.
 
 For scope and reports, see [SUPPORT.md](SUPPORT.md). Documentation verification is recorded in [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md); other release gates remain separate.
 

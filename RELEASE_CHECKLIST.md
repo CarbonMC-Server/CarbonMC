@@ -2,7 +2,7 @@
 
 ## Sign-off
 
-**Gate 5: complete for the current 0.1.0 developer-preview documentation baseline.** Reviewed and verified by Codex against the current source and a freshly built Windows executable. This sign-off covers release documentation/support scope, not authorization to publish or a claim that all release gates passed. The eventual tagged Windows/Linux release must revalidate this documentation against its own artifacts before publication.
+**Gate 5: complete for the current 0.1.0 developer-preview documentation baseline.** Verified against the source and a freshly built Windows executable. This sign-off covers release documentation/support scope, not authorization to publish or a claim that all release gates passed. The eventual tagged Windows/Linux release must revalidate this documentation against its own artifacts before publication.
 
 | Requirement | Evidence / result |
 | --- | --- |
@@ -31,4 +31,4 @@ Raw verification logs and staged bundles are local evidence under ignored `work/
 
 ## Other gates and publication prerequisites
 
-Gates 1–4 remain open: distribution/fixture/dependency provenance; versioned reproducible Windows/Linux packaging and fresh-machine acceptance; two-client acceptance; and full save/crash/power-loss/platform release acceptance. The maintainer has designated CarbonMC on GitHub; a public reporting/security route and reviewed versioned release baseline still require sign-off. Maintainers must re-run this checklist on the final package before publishing. None of those unverified results is signed off here.
+Gates 1, 3 and 4 remain open: distribution/fixture/dependency provenance, two-client acceptance, and broader save/crash/power-loss acceptance. Windows/Linux release build and package smoke validation passed; see [RELEASE_BUILD.md](RELEASE_BUILD.md). The organization repository and committed baseline are established. Public release approval and a reporting/security contact remain separate prerequisites. Re-run this checklist when preparing a new release candidate.

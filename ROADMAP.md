@@ -18,7 +18,7 @@
 
 These are incremental prototype milestones, not a promise of exact vanilla generation. Permission groups and other administration work remain on the backlog while world generation is the priority.
 
-Release planning: see [RELEASE_READINESS.md](RELEASE_READINESS.md) for five preview gates (four open; documentation baseline complete) and eight larger production-readiness work areas; these are not equal-sized tasks or a completion percentage.
+Release planning: see [RELEASE_READINESS.md](RELEASE_READINESS.md) for five preview gates (three open; builds and documentation complete) and eight larger production-readiness work areas; these are not equal-sized tasks or a completion percentage.
 
 ## Phase 1 — protocol foundation
 
@@ -112,11 +112,11 @@ Historical terrain generators, chunk/region storage, async persistence, actual p
 
 ## Release documentation milestone — 2026-09-06
 
-**Done for the current developer-preview baseline:** release notes, operations/update/recovery instructions, known issues, support/reporting scope, and local documentation-verification script and sign-off. See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). Gates 1–4 remain open; final tagged/platform artifacts require documentation revalidation before publishing.
+**Done for the current developer-preview baseline:** release notes, operations/update/recovery instructions, known issues, support/reporting scope, and local documentation-verification script and sign-off. See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). Gates 1, 3 and 4 remain open; final tagged/platform artifacts require documentation revalidation before publishing.
 
-## Release packaging milestone — in progress (2026-09-06)
+## Release packaging milestone — complete for preview (2026-09-09)
 
-Review-package builder and standalone launchers, source/file/build manifests, notice inventory, checksum validation, independent rebuild comparison, and Windows/Linux separate-job CI are implemented. Local Windows package smoke checks pass without the compiler/runtime toolchain on PATH. Gate 2 remains open pending the reviewed committed baseline and final platform/reproducibility results. See [RELEASE_BUILD.md](RELEASE_BUILD.md).
+Review-package builder and standalone launchers, source/file/build manifests, notice inventory, checksum validation, independent rebuild comparison, and Windows/Linux separate-job CI are implemented. Local Windows package smoke checks pass without the compiler/runtime toolchain on PATH. Gate 2 is complete for the committed baseline validated on Windows MSVC and Linux GNU, including independent rebuild comparison and fresh-job artifact smoke tests. See [RELEASE_BUILD.md](RELEASE_BUILD.md).
 
 ## Engineering gates
 
