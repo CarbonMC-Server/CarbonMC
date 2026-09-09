@@ -28,7 +28,8 @@ class PackageTests(unittest.TestCase):
 
     def test_release_selection_is_independent_of_agent_instructions(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            # Match production ROOT after Windows short-name/junction resolution.
+            root = Path(temporary).resolve()
             for name in SOURCE_FILES:
                 if name == 'AGENTS.md':
                     continue
@@ -43,7 +44,8 @@ class PackageTests(unittest.TestCase):
 
     def test_missing_required_build_input_still_fails(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            # Match production ROOT after Windows short-name/junction resolution.
+            root = Path(temporary).resolve()
             for name in SOURCE_FILES:
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
