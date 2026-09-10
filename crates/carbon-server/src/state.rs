@@ -216,48 +216,106 @@ impl ServerState {
                 }
             }
         }
-        let mut connected = HashSet::new();
-        while let Some(position) = pending.pop_front() {
-            if !connected.insert(position) {
+        let mut visited = HashSet::new();
+        let mut removed = 0;
+        while let Some(start) = pending.pop_front() {
+            if visited.contains(&start) {
                 continue;
             }
-            for neighbor in [
-                BlockPosition {
-                    x: position.x - 1,
-                    ..position
-                },
-                BlockPosition {
-                    x: position.x + 1,
-                    ..position
-                },
-                BlockPosition {
-                    y: position.y - 1,
-                    ..position
-                },
-                BlockPosition {
-                    y: position.y + 1,
-                    ..position
-                },
-                BlockPosition {
-                    z: position.z - 1,
-                    ..position
-                },
-                BlockPosition {
-                    z: position.z + 1,
-                    ..position
-                },
-            ] {
-                if !connected.contains(&neighbor)
-                    && self.dimension_block_at(dimension, neighbor) == BlockKind::NetherPortal
-                {
-                    pending.push_back(neighbor);
+            let mut component = HashSet::new();
+            let mut queue = VecDeque::from([start]);
+            while let Some(position) = queue.pop_front() {
+                if !component.insert(position) {
+                    continue;
+                }
+                for (dx, dy, dz) in [
+                    (-1, 0, 0),
+                    (1, 0, 0),
+                    (0, -1, 0),
+                    (0, 1, 0),
+                    (0, 0, -1),
+                    (0, 0, 1),
+                ] {
+                    let (Some(x), Some(y), Some(z)) = (
+                        position.x.checked_add(dx),
+                        position.y.checked_add(dy),
+                        position.z.checked_add(dz),
+                    ) else {
+                        continue;
+                    };
+                    let neighbor = BlockPosition { x, y, z };
+                    if !component.contains(&neighbor)
+                        && self.dimension_block_at(dimension, neighbor) == BlockKind::NetherPortal
+                    {
+                        queue.push_back(neighbor);
+                    }
+                }
+            }
+            visited.extend(component.iter().copied());
+            // Validate each connected field separately so nearby intact portals survive.
+            if self.nether_portal_component_has_frame(dimension, &component) {
+                continue;
+            }
+            for position in &component {
+                self.set_dimension_block(dimension, *position, BlockKind::Air);
+            }
+            removed += component.len();
+        }
+        removed
+    }
+
+    fn nether_portal_component_has_frame(
+        &self,
+        dimension: DimensionKind,
+        component: &HashSet<BlockPosition>,
+    ) -> bool {
+        let min_x = component.iter().map(|p| p.x).min().unwrap();
+        let max_x = component.iter().map(|p| p.x).max().unwrap();
+        let min_y = component.iter().map(|p| p.y).min().unwrap();
+        let max_y = component.iter().map(|p| p.y).max().unwrap();
+        let min_z = component.iter().map(|p| p.z).min().unwrap();
+        let max_z = component.iter().map(|p| p.z).max().unwrap();
+        let along_x = min_z == max_z;
+        if !along_x && min_x != max_x {
+            return false;
+        }
+        let width = if along_x {
+            i64::from(max_x) - i64::from(min_x) + 1
+        } else {
+            i64::from(max_z) - i64::from(min_z) + 1
+        };
+        let height = i64::from(max_y) - i64::from(min_y) + 1;
+        if !(2..=21).contains(&width)
+            || !(3..=21).contains(&height)
+            || component.len() != (width * height) as usize
+        {
+            return false;
+        }
+        for y in -1..=height as i32 {
+            for along in -1..=width as i32 {
+                let side = along == -1 || along == width as i32;
+                let cap = y == -1 || y == height as i32;
+                if side && cap {
+                    continue;
+                }
+                let (Some(x), Some(y), Some(z)) = (
+                    min_x.checked_add(if along_x { along } else { 0 }),
+                    min_y.checked_add(y),
+                    min_z.checked_add(if along_x { 0 } else { along }),
+                ) else {
+                    return false;
+                };
+                let expected = if side || cap {
+                    BlockKind::Obsidian
+                } else {
+                    BlockKind::NetherPortal
+                };
+                if self.dimension_block_at(dimension, BlockPosition { x, y, z }) != expected {
+                    return false;
                 }
             }
         }
-        for position in &connected {
-            self.set_dimension_block(dimension, *position, BlockKind::Air);
-        }
-        connected.len()
+        true
     }
 
     fn activate_nether_portal_near(
@@ -304,6 +362,9 @@ impl ServerState {
             }
             let complete = (0..=height).all(|y| {
                 (0..=width).all(|x| {
+                    if (x == 0 || x == width) && (y == 0 || y == height) {
+                        return true;
+                    }
                     let expected = if x == 0 || x == width || y == 0 || y == height {
                         BlockKind::Obsidian
                     } else {
@@ -5320,9 +5381,9 @@ mod tests {
             state.set_dimension_block(dimension, at(1, 1), BlockKind::Stone);
             assert!(!state.ignite_nether_portal(dimension, at(width - 1, height - 1)));
             state.set_dimension_block(dimension, at(1, 1), BlockKind::Air);
-            state.set_dimension_block(dimension, at(width, height), BlockKind::Air);
+            state.set_dimension_block(dimension, at(width, height - 1), BlockKind::Air);
             assert!(!state.ignite_nether_portal(dimension, at(1, 1)));
-            state.set_dimension_block(dimension, at(width, height), BlockKind::Obsidian);
+            state.set_dimension_block(dimension, at(width, height - 1), BlockKind::Obsidian);
             assert!(!state.ignite_nether_portal(DimensionKind::End, at(1, 1)));
             assert!(state.ignite_nether_portal(dimension, at(width - 1, height - 1)));
             assert!(!state.ignite_nether_portal(dimension, at(1, 1)));
@@ -5335,6 +5396,11 @@ mod tests {
                 }
             }
             assert!(state.set_dimension_block(dimension, anchor, BlockKind::Air));
+            assert_eq!(
+                state.dimension_block_at(dimension, at(1, 1)),
+                BlockKind::NetherPortal
+            );
+            assert!(state.set_dimension_block(dimension, at(0, 1), BlockKind::Air));
             for y in 1..height {
                 for along in 1..width {
                     assert_eq!(
@@ -5342,6 +5408,66 @@ mod tests {
                         BlockKind::Air
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn cornerless_portals_preserve_neighbors_and_require_every_edge() {
+        let (shutdown, _) = watch::channel(false);
+        let state = ServerState::new("world".into(), 42, shutdown);
+        for (dimension, along_x) in [
+            (DimensionKind::Overworld, true),
+            (DimensionKind::Nether, false),
+        ] {
+            let at = |offset: i32, along: i32, y: i32| BlockPosition {
+                x: -100 + if along_x { along } else { offset },
+                y: 150 + y,
+                z: -100 + if along_x { offset } else { along },
+            };
+            for offset in [0, 2] {
+                for y in 0..=4 {
+                    for x in 0..=3 {
+                        let side = x == 0 || x == 3;
+                        let cap = y == 0 || y == 4;
+                        state.set_dimension_block(
+                            dimension,
+                            at(offset, x, y),
+                            if side != cap {
+                                BlockKind::Obsidian
+                            } else {
+                                BlockKind::Air
+                            },
+                        );
+                    }
+                }
+                assert!(state.ignite_nether_portal(dimension, at(offset, 2, 3)));
+            }
+            for (x, y) in [(0, 0), (3, 0), (0, 4), (3, 4)] {
+                state.set_dimension_block(dimension, at(0, x, y), BlockKind::Obsidian);
+                state.set_dimension_block(dimension, at(0, x, y), BlockKind::Air);
+                assert_eq!(
+                    state.dimension_block_at(dimension, at(0, 1, 1)),
+                    BlockKind::NetherPortal
+                );
+            }
+            for (x, y) in [(0, 2), (3, 2), (1, 0), (2, 4)] {
+                state.set_dimension_block(dimension, at(0, x, y), BlockKind::Air);
+                for inner_y in 1..4 {
+                    for inner_x in 1..3 {
+                        assert_eq!(
+                            state.dimension_block_at(dimension, at(0, inner_x, inner_y)),
+                            BlockKind::Air
+                        );
+                        assert_eq!(
+                            state.dimension_block_at(dimension, at(2, inner_x, inner_y)),
+                            BlockKind::NetherPortal
+                        );
+                    }
+                }
+                assert!(!state.ignite_nether_portal(dimension, at(0, 1, 1)));
+                state.set_dimension_block(dimension, at(0, x, y), BlockKind::Obsidian);
+                assert!(state.ignite_nether_portal(dimension, at(0, 1, 1)));
             }
         }
     }
@@ -5408,7 +5534,7 @@ mod tests {
         reloaded.set_block(
             BlockPosition {
                 x: -172,
-                y: 150,
+                y: 151,
                 z: -200,
             },
             BlockKind::Air,

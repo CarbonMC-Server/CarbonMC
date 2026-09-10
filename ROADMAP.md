@@ -18,6 +18,8 @@
 
 14. **Done (prototype):** variable rectangular Nether portal frames from 4×5 through 23×23 outer blocks ignite with flint and steel in either orientation, with bounded validation, required obsidian corners, revisioned persistent interiors, and frame-damage collapse. Cornerless frames, fire blocks, and generated-portal integrity parity remain future work.
 
+15. **Done (prototype):** Nether portal corners are optional at every supported frame size. Removing corner blocks preserves active interiors; required-edge damage validates connected fields separately, preserving nearby intact portals. Regression coverage includes both orientations/dimensions, all four corners, every edge, and re-ignition after repair. Fire blocks and full generated-portal integrity parity remain future work.
+
 These are incremental prototype milestones, not a promise of exact vanilla generation. Permission groups and other administration work remain on the backlog while world generation is the priority.
 
 Release planning: see [RELEASE_READINESS.md](RELEASE_READINESS.md) for five preview gates (three open; builds and documentation complete) and eight larger production-readiness work areas; these are not equal-sized tasks or a completion percentage.
@@ -66,7 +68,7 @@ Release planning: see [RELEASE_READINESS.md](RELEASE_READINESS.md) for five prev
 - **Done (prototype):** finite End-stone island slabs, void-separated central/outer topology, compact column bounds, void-safe structure filtering and dimension-entry fallback.
 - **Done (prototype):** generated active Overworld/End portal fields, automatic Overworld/End travel through feet-or-head contact, the existing five-second portal cooldown, and fixed safe arrivals separated from the destination portal.
 - **Done (prototype):** connected lower Nether chamber regions and static lava basins with verified 26.2 source-lava state encoding, deterministic bounds, and dimension isolation.
-- Implement falling-block physics and Fortune/Silk Touch gravel modifiers, fire blocks, cornerless portal frames, stronghold placement, End exit/gateway progression, richer End topology/decorators, lava flow, and dimension-specific mobs/game rules.
+- Implement falling-block physics and Fortune/Silk Touch gravel modifiers, fire blocks, stronghold placement, End exit/gateway progression, richer End topology/decorators, lava flow, and dimension-specific mobs/game rules.
 - Implement the remaining vanilla structure families, template/jigsaw placement, loot tables, location commands, and structure save metadata.
 - **Done (prototype):** craftable/placeable persistent furnaces, coal fuel, raw iron/copper/gold and cobblestone smelting, exact outputs, progress synchronization, shared world-position state, save/reload, and safe content drops on break.
 - **Done (prototype):** craftable/placeable 27-slot chests with verified 26.2 screens, left/right and bidirectional shift-click transfers, shared multiplayer state, item-metadata persistence, save/reload, and exact content drops on break.

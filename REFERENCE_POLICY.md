@@ -1,5 +1,9 @@
 # Reference and licensing policy
 
+## Review on 2026-09-10: optional portal corners and isolated frame integrity
+
+Corner handling, connected-field validation, and regression tests were independently written against Carbon's existing portal and block-edit APIs. No external source, tests, assets, or data were consulted or copied, and no dependencies were added. Generated-portal parity remains outside this prototype milestone.
+
 ## Review on 2026-09-10: variable portal frames
 
 Reconfirmed the local Pumpkin-ref/LICENSE declares GPL-3.0. This milestone was independently implemented using Carbon's existing block queries, portal ignition, revisioned edits, and save APIs. No reference implementation, tests, assets, or data were copied or adapted; no dependency was added. Required corners and bounded rectangular dimensions are explicit Carbon prototype behavior, not a claim of full vanilla parity.
