@@ -43,6 +43,7 @@ pub enum StatusEffectKind {
     Strength,
     Regeneration,
     Resistance,
+    FireResistance,
     Hunger,
     Poison,
 }
@@ -56,6 +57,7 @@ impl StatusEffectKind {
             Self::Strength => "strength",
             Self::Regeneration => "regeneration",
             Self::Resistance => "resistance",
+            Self::FireResistance => "fire_resistance",
             Self::Hunger => "hunger",
             Self::Poison => "poison",
         }
@@ -69,6 +71,7 @@ impl StatusEffectKind {
             Self::Strength => 4,
             Self::Regeneration => 9,
             Self::Resistance => 10,
+            Self::FireResistance => 11,
             Self::Hunger => 16,
             Self::Poison => 18,
         }

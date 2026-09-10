@@ -926,7 +926,12 @@ impl ServerState {
             burning.retain(|_, until| *until >= tick);
         }
         for (id, amount) in damage {
-            self.damage_player(id, amount);
+            let protected = self.status_effects(id).iter().any(|effect| {
+                effect.kind == StatusEffectKind::FireResistance && effect.remaining_ticks > 0
+            });
+            if !protected {
+                self.damage_player(id, amount);
+            }
         }
     }
 
@@ -4250,6 +4255,7 @@ fn parse_status_effect_kind(value: &str) -> Option<StatusEffectKind> {
         "strength" => Some(StatusEffectKind::Strength),
         "regeneration" | "regen" => Some(StatusEffectKind::Regeneration),
         "resistance" => Some(StatusEffectKind::Resistance),
+        "fire_resistance" => Some(StatusEffectKind::FireResistance),
         "hunger" => Some(StatusEffectKind::Hunger),
         "poison" => Some(StatusEffectKind::Poison),
         _ => None,
@@ -4463,6 +4469,41 @@ mod tests {
     }
 
     #[test]
+    fn fire_resistance_blocks_hazards_until_expiry_or_removal() {
+        let state = ServerState::new("world".into(), 42, watch::channel(false).0);
+        let id = Uuid::new_v4();
+        let feet = BlockPosition {
+            x: 40,
+            y: 150,
+            z: 40,
+        };
+        let mut player = test_player(id, "Protected");
+        player.position = feet;
+        assert!(state.add_player(player));
+        state.set_block(feet, BlockKind::Lava);
+        state.set_block(BlockPosition { y: 151, ..feet }, BlockKind::Air);
+        assert!(state.apply_status_effect(id, StatusEffectKind::FireResistance, 0, 10));
+        for _ in 0..10 {
+            state.advance_tick();
+        }
+        assert_eq!(state.vitals(id).unwrap().health, 20.0);
+        assert!(state.status_effects(id).is_empty());
+        for _ in 0..10 {
+            state.advance_tick();
+        }
+        assert_eq!(state.vitals(id).unwrap().health, 18.0);
+        state.set_block(feet, BlockKind::Air);
+        assert!(state.apply_status_effect(id, StatusEffectKind::FireResistance, 4, 200));
+        state.tick_lava_hazards(30);
+        assert_eq!(state.vitals(id).unwrap().health, 18.0);
+        assert!(state.damage_player_combat(id, 2.0));
+        assert_eq!(state.vitals(id).unwrap().health, 16.0);
+        assert!(state.clear_status_effect(id, StatusEffectKind::FireResistance));
+        state.tick_lava_hazards(40);
+        assert_eq!(state.vitals(id).unwrap().health, 15.0);
+    }
+
+    #[test]
     fn cow_milk_conversion_is_exact_and_milk_cures_all_effects() {
         let (shutdown, _) = watch::channel(false);
         let state = ServerState::new("world".into(), 0, shutdown);
@@ -4470,6 +4511,7 @@ mod tests {
         assert!(state.add_player(test_player(id, "MilkTest")));
         assert!(state.give_item(id, ItemKind::Bucket, 2));
         assert!(state.apply_status_effect(id, StatusEffectKind::Poison, 0, 200));
+        assert!(state.apply_status_effect(id, StatusEffectKind::FireResistance, 0, 200));
         assert!(state.apply_status_effect(id, StatusEffectKind::Slowness, 1, 200));
 
         assert!(state.fill_milk_bucket(id, 0));
@@ -4513,6 +4555,7 @@ mod tests {
         let id = Uuid::new_v4();
         assert!(state.add_player(test_player(id, "DurableEffect")));
         assert!(state.apply_status_effect(id, StatusEffectKind::Resistance, 1, 400));
+        assert!(state.apply_status_effect(id, StatusEffectKind::FireResistance, 0, 600));
         assert!(state.damage_player_combat(id, 10.0));
         assert_eq!(state.vitals(id).unwrap().health, 14.0);
         state.save().unwrap();
@@ -4524,6 +4567,19 @@ mod tests {
             .find(|effect| effect.kind == StatusEffectKind::Resistance)
             .unwrap();
         assert_eq!((effect.amplifier, effect.remaining_ticks), (1, 400));
+        let fire = reloaded
+            .status_effects(id)
+            .into_iter()
+            .find(|effect| effect.kind == StatusEffectKind::FireResistance)
+            .unwrap();
+        assert_eq!(
+            (
+                fire.amplifier,
+                fire.remaining_ticks,
+                fire.kind.protocol_id()
+            ),
+            (0, 600, 11)
+        );
         fs::remove_dir_all(directory).unwrap();
     }
 

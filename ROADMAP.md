@@ -22,6 +22,8 @@
 
 16. **Done (prototype):** lava contact damage now queries the player's current dimension, including custom-named Overworlds. Water at feet or head immediately clears lingering burns after direct lava contact ends; mixed water/lava contact still deals lava damage. Tests cover all dimensions, both contact positions, re-ignition, dimension isolation, and expiry. Rain, cauldrons, fire resistance, visible player fire state, fire blocks, and full fluid behavior remain future work.
 
+17. **Done (prototype):** Fire Resistance joins the administrative effect command, existing HUD synchronization, and persistent effects. It blocks lava-contact and lingering-burn damage while active, leaves unrelated damage unchanged, and follows expiry, explicit removal, and milk clearing. Tests cover expiry on a hazard tick, minimum/maximum amplifier, removal, milk, and save/reload. Brewing, potion acquisition, fire blocks, and full fire/fluid parity remain future work.
+
 These are incremental prototype milestones, not a promise of exact vanilla generation. Permission groups and other administration work remain on the backlog while world generation is the priority.
 
 Release planning: see [RELEASE_READINESS.md](RELEASE_READINESS.md) for five preview gates (three open; builds and documentation complete) and eight larger production-readiness work areas; these are not equal-sized tasks or a completion percentage.

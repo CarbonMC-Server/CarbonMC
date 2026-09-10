@@ -1,5 +1,9 @@
 # Reference and licensing policy
 
+## Review on 2026-09-10: Fire Resistance effect
+
+The local Mojang-generated 26.2 registry report identifies minecraft:fire_resistance as effect ID 11; only this interoperability fact is embedded, and the report is not redistributed. Effect integration, hazard immunity, and tests were independently written against Carbon's existing APIs. No external implementation, tests, or assets were copied or adapted; no dependency was added. Brewing and full fire parity remain outside this milestone.
+
 ## Review on 2026-09-10: water extinguishing and dimension-aware lava hazards
 
 Contact sampling, water extinguishing, mixed-fluid precedence, and tests were independently written from Carbon's block queries, player dimension names, hazard timer, and vitals APIs. No external implementation, tests, data, or assets were consulted or copied; no dependency was added. These are explicit prototype rules, not a full fluid or fire-parity claim.

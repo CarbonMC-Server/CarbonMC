@@ -520,6 +520,7 @@ fn parse_status_effect(value: &str) -> Option<StatusEffectKind> {
         "strength" => Some(StatusEffectKind::Strength),
         "regeneration" | "regen" => Some(StatusEffectKind::Regeneration),
         "resistance" => Some(StatusEffectKind::Resistance),
+        "fire_resistance" => Some(StatusEffectKind::FireResistance),
         "hunger" => Some(StatusEffectKind::Hunger),
         "poison" => Some(StatusEffectKind::Poison),
         _ => None,
