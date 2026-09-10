@@ -268,51 +268,61 @@ impl ServerState {
         if dimension == DimensionKind::End {
             return false;
         }
-        for along_offset in 0..=3 {
-            for y_offset in 0..=4 {
-                for along_x in [true, false] {
-                    let anchor = BlockPosition {
-                        x: if along_x {
-                            ignition.x - along_offset
-                        } else {
-                            ignition.x
-                        },
-                        y: ignition.y - y_offset,
-                        z: if along_x {
-                            ignition.z
-                        } else {
-                            ignition.z - along_offset
-                        },
+        // Bound every scan: interiors may be 2..=21 wide and 3..=21 high.
+        if self.dimension_block_at(dimension, ignition) != BlockKind::Air {
+            return false;
+        }
+        for along_x in [true, false] {
+            let at = |along: i32, y: i32| -> Option<BlockPosition> {
+                Some(BlockPosition {
+                    x: ignition.x.checked_add(if along_x { along } else { 0 })?,
+                    y: ignition.y.checked_add(y)?,
+                    z: ignition.z.checked_add(if along_x { 0 } else { along })?,
+                })
+            };
+            let block = |along, y| {
+                at(along, y).map(|position| self.dimension_block_at(dimension, position))
+            };
+            let Some(left) = (1..=21).find(|&n| block(-n, 0) != Some(BlockKind::Air)) else {
+                continue;
+            };
+            let Some(bottom) = (1..=21).find(|&n| block(0, -n) != Some(BlockKind::Air)) else {
+                continue;
+            };
+            let x0 = -left;
+            let y0 = -bottom;
+            let Some(width) = (2..=22).find(|&n| block(x0 + n, y0 + 1) != Some(BlockKind::Air))
+            else {
+                continue;
+            };
+            let Some(height) = (2..=22).find(|&n| block(x0 + 1, y0 + n) != Some(BlockKind::Air))
+            else {
+                continue;
+            };
+            if width < 3 || height < 4 || left >= width || bottom >= height {
+                continue;
+            }
+            let complete = (0..=height).all(|y| {
+                (0..=width).all(|x| {
+                    let expected = if x == 0 || x == width || y == 0 || y == height {
+                        BlockKind::Obsidian
+                    } else {
+                        BlockKind::Air
                     };
-                    let at = |along: i32, y: i32| BlockPosition {
-                        x: anchor.x + if along_x { along } else { 0 },
-                        y: anchor.y + y,
-                        z: anchor.z + if along_x { 0 } else { along },
-                    };
-                    let frame_complete = (0..=4).all(|y| {
-                        (0..=3).all(|along| {
-                            let boundary = along == 0 || along == 3 || y == 0 || y == 4;
-                            let kind = self.dimension_block_at(dimension, at(along, y));
-                            if boundary {
-                                kind == BlockKind::Obsidian
-                            } else {
-                                kind == BlockKind::Air
-                            }
-                        })
-                    });
-                    if frame_complete {
-                        for y in 1..=3 {
-                            for along in 1..=2 {
-                                self.set_dimension_block(
-                                    dimension,
-                                    at(along, y),
-                                    BlockKind::NetherPortal,
-                                );
-                            }
-                        }
-                        return true;
+                    block(x0 + x, y0 + y) == Some(expected)
+                })
+            });
+            if complete {
+                for y in 1..height {
+                    for x in 1..width {
+                        self.set_dimension_block(
+                            dimension,
+                            at(x0 + x, y0 + y).expect("validated portal coordinate"),
+                            BlockKind::NetherPortal,
+                        );
                     }
                 }
+                return true;
             }
         }
         false
@@ -5257,7 +5267,7 @@ mod tests {
     fn flint_and_steel_ignites_and_frame_damage_collapses_both_orientations() {
         let (shutdown, _) = watch::channel(false);
         let state = ServerState::new("world".into(), 42, shutdown);
-        for (dimension, anchor, along_x) in [
+        for (dimension, anchor, along_x, width, height) in [
             (
                 DimensionKind::Overworld,
                 BlockPosition {
@@ -5266,6 +5276,8 @@ mod tests {
                     z: 200,
                 },
                 true,
+                3,
+                4,
             ),
             (
                 DimensionKind::Nether,
@@ -5275,6 +5287,8 @@ mod tests {
                     z: 200,
                 },
                 false,
+                22,
+                22,
             ),
         ] {
             let at = |along: i32, y: i32| BlockPosition {
@@ -5282,29 +5296,38 @@ mod tests {
                 y: anchor.y + y,
                 z: anchor.z + if along_x { 0 } else { along },
             };
-            for y in 1..=3 {
-                for along in 1..=2 {
+            for y in 1..height {
+                for along in 1..width {
                     state.set_dimension_block(dimension, at(along, y), BlockKind::Air);
                 }
             }
-            for y in 0..=4 {
-                for along in 0..=3 {
-                    if along == 0 || along == 3 || y == 0 || y == 4 {
+            for y in 0..=height {
+                for along in 0..=width {
+                    if along == 0 || along == width || y == 0 || y == height {
                         state.set_dimension_block(dimension, at(along, y), BlockKind::Obsidian);
                     }
                 }
             }
-            for y in 1..=3 {
-                for along in 1..=2 {
+            for y in 1..height {
+                for along in 1..width {
                     assert_eq!(
                         state.dimension_block_at(dimension, at(along, y)),
                         BlockKind::Air
                     );
                 }
             }
-            assert!(state.ignite_nether_portal(dimension, at(1, 1)));
-            for y in 1..=3 {
-                for along in 1..=2 {
+            // Invalid interiors and incomplete frames must never be partially filled.
+            state.set_dimension_block(dimension, at(1, 1), BlockKind::Stone);
+            assert!(!state.ignite_nether_portal(dimension, at(width - 1, height - 1)));
+            state.set_dimension_block(dimension, at(1, 1), BlockKind::Air);
+            state.set_dimension_block(dimension, at(width, height), BlockKind::Air);
+            assert!(!state.ignite_nether_portal(dimension, at(1, 1)));
+            state.set_dimension_block(dimension, at(width, height), BlockKind::Obsidian);
+            assert!(!state.ignite_nether_portal(DimensionKind::End, at(1, 1)));
+            assert!(state.ignite_nether_portal(dimension, at(width - 1, height - 1)));
+            assert!(!state.ignite_nether_portal(dimension, at(1, 1)));
+            for y in 1..height {
+                for along in 1..width {
                     assert_eq!(
                         state.dimension_block_at(dimension, at(along, y)),
                         BlockKind::NetherPortal
@@ -5312,8 +5335,8 @@ mod tests {
                 }
             }
             assert!(state.set_dimension_block(dimension, anchor, BlockKind::Air));
-            for y in 1..=3 {
-                for along in 1..=2 {
+            for y in 1..height {
+                for along in 1..width {
                     assert_eq!(
                         state.dimension_block_at(dimension, at(along, y)),
                         BlockKind::Air
@@ -5321,6 +5344,77 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn variable_portal_size_limits_and_saved_interior() {
+        let directory = std::env::temp_dir().join(format!("carbon-portals-{}", Uuid::new_v4()));
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("operators.json");
+        let (shutdown, _) = watch::channel(false);
+        let state =
+            ServerState::with_operator_file("world".into(), 42, shutdown.clone(), path.clone())
+                .unwrap();
+        for (index, width, height, valid) in [
+            (0, 2, 4, false),
+            (1, 3, 3, false),
+            (2, 23, 4, false),
+            (3, 3, 23, false),
+            (4, 22, 22, true),
+            (5, 7, 9, true),
+        ] {
+            let at = |x, y| BlockPosition {
+                x: -300 + index * 32 + x,
+                y: 150 + y,
+                z: -200,
+            };
+            for y in 0..=height {
+                for x in 0..=width {
+                    state.set_block(
+                        at(x, y),
+                        if x == 0 || x == width || y == 0 || y == height {
+                            BlockKind::Obsidian
+                        } else {
+                            BlockKind::Air
+                        },
+                    );
+                }
+            }
+            assert_eq!(
+                state.ignite_nether_portal(DimensionKind::Overworld, at(1, 1)),
+                valid
+            );
+            for y in 1..height {
+                for x in 1..width {
+                    assert_eq!(
+                        state.block_at(at(x, y)),
+                        if valid {
+                            BlockKind::NetherPortal
+                        } else {
+                            BlockKind::Air
+                        }
+                    );
+                }
+            }
+        }
+        state.save().unwrap();
+        let reloaded = ServerState::with_operator_file("world".into(), 42, shutdown, path).unwrap();
+        let inside = BlockPosition {
+            x: -171,
+            y: 151,
+            z: -200,
+        };
+        assert_eq!(reloaded.block_at(inside), BlockKind::NetherPortal);
+        reloaded.set_block(
+            BlockPosition {
+                x: -172,
+                y: 150,
+                z: -200,
+            },
+            BlockKind::Air,
+        );
+        assert_eq!(reloaded.block_at(inside), BlockKind::Air);
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]
