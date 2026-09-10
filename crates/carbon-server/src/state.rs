@@ -878,45 +878,55 @@ impl ServerState {
     }
 
     fn tick_lava_hazards(&self, tick: u64) {
-        let exposed: Vec<_> = self
+        let contacts: Vec<_> = self
             .players
             .read()
             .unwrap_or_else(|error| error.into_inner())
             .iter()
-            .filter(|player| player.world == DimensionKind::Nether.name())
-            .filter(|player| {
-                [
-                    player.position,
-                    BlockPosition {
-                        y: player.position.y + 1,
-                        ..player.position
-                    },
-                ]
-                .into_iter()
-                .any(|position| {
-                    self.dimension_block_at(DimensionKind::Nether, position) == BlockKind::Lava
-                })
+            .map(|player| {
+                let dimension = match player.world.as_str() {
+                    name if name == DimensionKind::Nether.name() => DimensionKind::Nether,
+                    name if name == DimensionKind::End.name() => DimensionKind::End,
+                    _ => DimensionKind::Overworld,
+                };
+                let feet = self.dimension_block_at(dimension, player.position);
+                let head = player.position.y.checked_add(1).map(|y| {
+                    self.dimension_block_at(
+                        dimension,
+                        BlockPosition {
+                            y,
+                            ..player.position
+                        },
+                    )
+                });
+                (
+                    player.id,
+                    feet == BlockKind::Lava || head == Some(BlockKind::Lava),
+                    feet == BlockKind::Water || head == Some(BlockKind::Water),
+                )
             })
-            .map(|player| player.id)
             .collect();
+        let mut damage = Vec::new();
         {
             let mut burning = self
                 .lava_burn_until
                 .write()
                 .unwrap_or_else(|error| error.into_inner());
-            for id in &exposed {
-                burning.insert(*id, tick.saturating_add(80));
+            for (id, lava, water) in contacts {
+                // Water cancels lingering fire, but cannot shield direct lava contact.
+                if lava {
+                    burning.insert(id, tick.saturating_add(80));
+                } else if water {
+                    burning.remove(&id);
+                }
+                if tick % 10 == 0 && burning.get(&id).is_some_and(|until| *until >= tick) {
+                    damage.push((id, if lava { 2.0 } else { 1.0 }));
+                }
             }
             burning.retain(|_, until| *until >= tick);
         }
-        if tick % 10 == 0 {
-            let burning = self
-                .lava_burn_until
-                .read()
-                .unwrap_or_else(|error| error.into_inner());
-            for id in burning.keys() {
-                self.damage_player(*id, if exposed.contains(id) { 2.0 } else { 1.0 });
-            }
+        for (id, amount) in damage {
+            self.damage_player(id, amount);
         }
     }
 
@@ -4366,6 +4376,89 @@ mod tests {
         for _ in 0..10 {
             state.advance_tick();
         }
+        assert_eq!(state.vitals(id).unwrap().health, 17.0);
+    }
+
+    #[test]
+    fn water_extinguishes_lava_burns_in_each_dimension_at_feet_or_head() {
+        for dimension in [
+            DimensionKind::Overworld,
+            DimensionKind::Nether,
+            DimensionKind::End,
+        ] {
+            for water_y in [0, 1] {
+                let state = ServerState::new("custom_world".into(), 42, watch::channel(false).0);
+                let id = Uuid::new_v4();
+                let feet = BlockPosition {
+                    x: 40,
+                    y: 150,
+                    z: 40,
+                };
+                let head = BlockPosition { y: 151, ..feet };
+                let mut player = test_player(id, "Swimmer");
+                player.world = if dimension == DimensionKind::Overworld {
+                    "custom_world".into()
+                } else {
+                    dimension.name().into()
+                };
+                player.position = feet;
+                assert!(state.add_player(player));
+                state.set_dimension_block(dimension, feet, BlockKind::Air);
+                state.set_dimension_block(dimension, head, BlockKind::Lava);
+                state.tick_lava_hazards(10);
+                assert_eq!(state.vitals(id).unwrap().health, 18.0);
+                state.set_dimension_block(dimension, head, BlockKind::Air);
+                state.tick_lava_hazards(20);
+                assert_eq!(state.vitals(id).unwrap().health, 17.0);
+                let water = BlockPosition {
+                    y: feet.y + water_y,
+                    ..feet
+                };
+                state.set_dimension_block(dimension, water, BlockKind::Water);
+                state.tick_lava_hazards(21);
+                assert!(!state.lava_burn_until.read().unwrap().contains_key(&id));
+                state.set_dimension_block(dimension, water, BlockKind::Air);
+                state.tick_lava_hazards(30);
+                assert_eq!(state.vitals(id).unwrap().health, 17.0);
+                state.set_dimension_block(dimension, feet, BlockKind::Lava);
+                state.set_dimension_block(dimension, head, BlockKind::Water);
+                state.tick_lava_hazards(40);
+                assert_eq!(state.vitals(id).unwrap().health, 15.0);
+                state.set_dimension_block(dimension, feet, BlockKind::Air);
+                state.tick_lava_hazards(50);
+                assert_eq!(state.vitals(id).unwrap().health, 15.0);
+            }
+        }
+    }
+
+    #[test]
+    fn lava_and_water_contacts_do_not_cross_dimensions_and_burns_expire() {
+        let state = ServerState::new("world".into(), 42, watch::channel(false).0);
+        let id = Uuid::new_v4();
+        let feet = BlockPosition {
+            x: 40,
+            y: 150,
+            z: 40,
+        };
+        let head = BlockPosition { y: 151, ..feet };
+        let mut player = test_player(id, "DryPlayer");
+        player.position = feet;
+        assert!(state.add_player(player));
+        state.set_block(feet, BlockKind::Air);
+        state.set_block(head, BlockKind::Air);
+        state.set_dimension_block(DimensionKind::Nether, feet, BlockKind::Lava);
+        state.tick_lava_hazards(10);
+        assert_eq!(state.vitals(id).unwrap().health, 20.0);
+        state.set_block(feet, BlockKind::Lava);
+        state.tick_lava_hazards(20);
+        assert_eq!(state.vitals(id).unwrap().health, 18.0);
+        state.set_block(feet, BlockKind::Air);
+        state.set_dimension_block(DimensionKind::Nether, feet, BlockKind::Water);
+        state.tick_lava_hazards(30);
+        assert_eq!(state.vitals(id).unwrap().health, 17.0);
+        state.tick_lava_hazards(101);
+        assert!(!state.lava_burn_until.read().unwrap().contains_key(&id));
+        state.tick_lava_hazards(110);
         assert_eq!(state.vitals(id).unwrap().health, 17.0);
     }
 

@@ -1,5 +1,9 @@
 # Reference and licensing policy
 
+## Review on 2026-09-10: water extinguishing and dimension-aware lava hazards
+
+Contact sampling, water extinguishing, mixed-fluid precedence, and tests were independently written from Carbon's block queries, player dimension names, hazard timer, and vitals APIs. No external implementation, tests, data, or assets were consulted or copied; no dependency was added. These are explicit prototype rules, not a full fluid or fire-parity claim.
+
 ## Review on 2026-09-10: optional portal corners and isolated frame integrity
 
 Corner handling, connected-field validation, and regression tests were independently written against Carbon's existing portal and block-edit APIs. No external source, tests, assets, or data were consulted or copied, and no dependencies were added. Generated-portal parity remains outside this prototype milestone.

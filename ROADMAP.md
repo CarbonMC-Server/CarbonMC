@@ -20,6 +20,8 @@
 
 15. **Done (prototype):** Nether portal corners are optional at every supported frame size. Removing corner blocks preserves active interiors; required-edge damage validates connected fields separately, preserving nearby intact portals. Regression coverage includes both orientations/dimensions, all four corners, every edge, and re-ignition after repair. Fire blocks and full generated-portal integrity parity remain future work.
 
+16. **Done (prototype):** lava contact damage now queries the player's current dimension, including custom-named Overworlds. Water at feet or head immediately clears lingering burns after direct lava contact ends; mixed water/lava contact still deals lava damage. Tests cover all dimensions, both contact positions, re-ignition, dimension isolation, and expiry. Rain, cauldrons, fire resistance, visible player fire state, fire blocks, and full fluid behavior remain future work.
+
 These are incremental prototype milestones, not a promise of exact vanilla generation. Permission groups and other administration work remain on the backlog while world generation is the priority.
 
 Release planning: see [RELEASE_READINESS.md](RELEASE_READINESS.md) for five preview gates (three open; builds and documentation complete) and eight larger production-readiness work areas; these are not equal-sized tasks or a completion percentage.
