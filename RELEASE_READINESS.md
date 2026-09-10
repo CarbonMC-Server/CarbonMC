@@ -1,4 +1,4 @@
-# Release readiness — updated 2026-09-09
+# Release readiness — updated 2026-09-10
 
 ## Status
 
@@ -11,7 +11,7 @@ No defensible completion percentage or calendar estimate is available. The five 
 1. **Distribution and provenance review.** Define a clean release file list; exclude local Pumpkin reference checkout, logs, saves, downloaded server jars, and generated research reports. Review the bundled configuration/chunk binary fixtures and dependency notices before distribution. `REFERENCE_POLICY.md` documents limited reference reviews, not a full repository audit.
 2. **Reproducible release builds — complete for the validated developer-preview baseline.** The committed organization-repository snapshot passed native Windows MSVC/Linux GNU builds, exact independent-build archive comparisons, and separate fresh-job package smoke validation. Versioned review archives include launchers, notices, source/build/file manifests and checksums. See [RELEASE_BUILD.md](RELEASE_BUILD.md) for the tested commit and workflow evidence. This does not authorize a public release or close provenance/client/save-safety work.
 3. **Real-client acceptance.** Record a two-client 26.2 test pass: join/leave, chat, permissions, building/mining, inventory/crafting, containers, combat/death, dimensions, chunk transitions, and restart/rejoin. Recent milestones have automated tests, not a recorded visual client acceptance pass.
-4. **Save and upgrade safety — prototype milestone implemented; release gate remains open.** Schema 2 / generator 1 metadata, schema 1 migration on save, fail-closed downgrade checks, disposable recovery/interrupted-rotation/write-failure tests, and operator backup/restore instructions are implemented. See [SAVE_COMPATIBILITY.md](SAVE_COMPATIBILITY.md). Unedited terrain still uses current code. Actual crash/power-loss exercises and Windows/Linux packaged-release restore acceptance remain outstanding.
+4. **Save and upgrade safety — prototype milestone implemented; release gate remains open.** Schema 2 / generator 1 metadata, schema 1 migration on save, fail-closed downgrade checks, disposable recovery/interrupted-rotation/write-failure tests, and operator backup/restore instructions are implemented. See [SAVE_COMPATIBILITY.md](SAVE_COMPATIBILITY.md). Unedited terrain still uses current code. Six save-writer process-crash checkpoints and local packaged non-empty restore/upgrade acceptance now pass. Native Windows/Linux workflow results are pending; actual power-loss acceptance remains outstanding because no expendable isolated environment is available.
 5. **Release documentation and support scope — complete for the current developer-preview baseline.** Release notes, install/update/recovery instructions, known issues, bug-report steps, and offline/trusted-network warnings are written and reconciled with the current executable and local staging bundle. See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for evidence and documentation sign-off. Final tagged/platform artifacts must revalidate the checklist before publication; other gates remain separate.
 
 Gates 2 and 5 are complete for the developer-preview baseline. Gates 1, 3 and 4 remain open; this is not approval to publish a release.
@@ -29,10 +29,23 @@ Gates 2 and 5 are complete for the developer-preview baseline. Gates 1, 3 and 4 
 
 “Production ready” must name a supported feature set and operational limits. A complete vanilla/Paper replacement is a substantially larger target than an experimental Carbon preview.
 
+## Production acceptance criteria
+
+Completion must be demonstrated against a named release commit, supported client version, operating systems, player/load limit, and supported feature set. Passing unit tests alone does not establish these criteria.
+
+| Area | Evidence required before production use |
+| --- | --- |
+| Identity and network security | Online-mode encrypted/authenticated login works with real accounts; invalid sessions fail; identity, skin, and chat policies are enforced. |
+| Abuse resistance | Malformed packets, slow clients, login floods, oversized saves, and resource exhaustion have tested bounds and predictable rejection behavior. |
+| Storage and upgrades | Documented durability contract; crash and actual power-loss exercises; isolated-writer guarantees; bounded/validated loading; verified migration, backup, restore and rollback on supported filesystems. |
+| Multiplayer | Recorded two-client acceptance, then latency/disconnect regression coverage across inventories, containers, world edits, combat, dimensions, death and rejoin. |
+| Performance | Reproducible load and soak runs establish sustainable player counts, tick latency, memory use, disk behavior and overload recovery. |
+| Gameplay and generation | Define supported mechanics and test them end-to-end. Full vanilla/Paper parity additionally needs the outstanding fluid, generation, progression, combat, container, potion and mob work in ROADMAP.md. |
+| Distribution and support | Fixture/dependency provenance cleared; release packages tested on Windows/Linux; known issues, update/restore steps, reporting contact and maintenance scope recorded. |
+| Extensions and administration | Stable versioned contracts, tested access control and resource limits for supported extensions; otherwise explicitly exclude runtime-loaded extensions. |
+
 ## Current implementation order
 
-Finite End topology, portal travel, dimensional landmarks and loot, Overworld cave regions/aquifers, connected lower Nether chambers, sparse Nether decorators, periodic lava-contact and lingering burn damage, and adjacent-chunk lava light are now implemented as prototypes. Dynamic lava flow, client-visible fire state, and extinguishing rules remain open. Three preview gates remain open; automated generation tests do not close real-client acceptance, distribution review, save/upgrade exercises, or release packaging gates.
+Prioritize storage acceptance, authenticated networking, abuse resistance, and real-client validation before advertising public-server readiness. Recent gameplay prototypes include variable-size/corner-optional portals, water extinguishing, dimension-aware lava hazards, and Fire Resistance. These do not close the three remaining preview gates.
 
-The Nether ceiling/bedrock roof, connected lower chambers, bounded static lava, deliberate flint-and-steel ignition for player-built fixed-size portals, ten-percent flint drops from underground gravel, frame collapse, End island topology, and separated-arrival End portal fields are implemented as prototypes. Falling-block and enchantment-aware gravel behavior, fire blocks, variable frames, strongholds, End progression, richer decorators, and full lava behavior are still open. Three preview gates remain open, including real-client visual acceptance of the terrain and portal transition.
-
-Biome terrain/coasts, first surface plants, and the initial Nether cavern pass are implemented as prototypes. Next world work is End islands/portals and structures; flowers, plant loot/growth, and richer decorators remain open. These terrain additions do not close the remaining three preview release gates; documentation gate 5 was completed separately. Before advertising public-server readiness, prioritize security, persistence, and client acceptance over adding more world content. See `ROADMAP.md` for the detailed backlog.
+Save-safety work now includes deterministic process termination at six save-writer stages and a packaged non-empty migration/restore/crash acceptance runner. Platform execution evidence is recorded in SAVE_COMPATIBILITY.md when available. Hardware power-loss acceptance remains a separate unmet requirement; process termination leaves the operating system and disk caches running.

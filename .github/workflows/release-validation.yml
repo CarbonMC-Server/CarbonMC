@@ -90,6 +90,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: smoke-${{ matrix.target }}
-          path: work/smoke/**/result.json
+          path: |
+            work/smoke/**/result.json
+            work/smoke/**/save-acceptance.json
           if-no-files-found: warn
           retention-days: 14

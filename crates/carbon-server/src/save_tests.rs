@@ -201,3 +201,109 @@ fn failed_temporary_write_keeps_primary_and_backup() {
     assert_eq!(fs::read(f.primary()).unwrap(), primary);
     assert_eq!(fs::read(f.backup()).unwrap(), backup);
 }
+
+// Compiled only into the test executable; shipped binaries have no pause hooks.
+pub(super) fn crash_checkpoint(path: &Path, stage: &str) {
+    if std::env::var_os("CARBON_CRASH_PATH").as_deref() != Some(path.as_os_str())
+        || std::env::var("CARBON_CRASH_STAGE").as_deref() != Ok(stage)
+    {
+        return;
+    }
+    fs::write(path.with_extension("ready"), stage).unwrap();
+    loop {
+        std::thread::park_timeout(std::time::Duration::from_secs(1));
+    }
+}
+
+#[test]
+#[ignore = "child process entry point; invoked by forced_process_crashes_preserve_committed_state"]
+fn crash_writer_child() {
+    let path = PathBuf::from(std::env::var_os("CARBON_CRASH_PATH").expect("parent supplies path"));
+    let bytes = fs::read(path.with_extension("next")).unwrap();
+    write_world_save(&path, &bytes).unwrap();
+    panic!("requested crash checkpoint was not reached");
+}
+
+#[test]
+fn forced_process_crashes_preserve_committed_state() {
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+    struct ChildGuard(std::process::Child);
+    impl Drop for ChildGuard {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    for stage in [
+        "temporary_open",
+        "temporary_synced",
+        "backup_removed",
+        "primary_rotated",
+        "committed",
+        "quarantined",
+    ] {
+        let f = Fixture::new();
+        let mut old = current();
+        old["blocks"] = json!([{"x":4,"y":70,"z":4,"kind":"stone"}]);
+        let mut next = old.clone();
+        next["blocks"][0]["kind"] = json!("diamond_ore");
+        f.write(&f.primary(), &old);
+        f.write(&f.backup(), &old);
+        f.write(&f.primary().with_extension("next"), &next);
+        if stage == "quarantined" {
+            fs::write(f.primary(), b"{torn").unwrap();
+        }
+        let mut child = ChildGuard(
+            Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "state::save_tests::crash_writer_child",
+                    "--ignored",
+                    "--nocapture",
+                ])
+                .env("CARBON_CRASH_PATH", f.primary())
+                .env("CARBON_CRASH_STAGE", stage)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::inherit())
+                .spawn()
+                .unwrap(),
+        );
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while !f.primary().with_extension("ready").exists() {
+            assert!(
+                child.0.try_wait().unwrap().is_none(),
+                "child exited before {stage}"
+            );
+            assert!(Instant::now() < deadline, "checkpoint timed out: {stage}");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        child.0.kill().unwrap();
+        assert!(!child.0.wait().unwrap().success());
+        let expected = if stage == "committed" {
+            BlockKind::DiamondOre
+        } else {
+            BlockKind::Stone
+        };
+        let state = f.state().unwrap();
+        let position = BlockPosition { x: 4, y: 70, z: 4 };
+        assert_eq!(state.block_at(position), expected, "recovery after {stage}");
+        state.save().unwrap();
+        assert_eq!(
+            f.state().unwrap().block_at(position),
+            expected,
+            "second restart after {stage}"
+        );
+        if stage == "quarantined" {
+            let evidence: Vec<_> = fs::read_dir(&f.0)
+                .unwrap()
+                .map(Result::unwrap)
+                .filter(|entry| entry.file_name().to_string_lossy().contains(".corrupt-"))
+                .collect();
+            assert_eq!(evidence.len(), 1);
+            assert_eq!(fs::read(evidence[0].path()).unwrap(), b"{torn");
+        }
+        println!("forced process crash recovery passed: {stage}");
+    }
+}

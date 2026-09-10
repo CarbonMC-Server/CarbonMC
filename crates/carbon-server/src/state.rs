@@ -3787,6 +3787,8 @@ fn write_world_save(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
             // Retain evidence and leave the known-good backup intact through replacement.
             let quarantine = path.with_extension(format!("json.corrupt-{}", Uuid::new_v4()));
             fs::rename(path, quarantine)?;
+            #[cfg(test)]
+            save_tests::crash_checkpoint(path, "quarantined");
         }
         Ok(_) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -3807,15 +3809,23 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
         .truncate(true)
         .write(true)
         .open(&temporary)?;
+    #[cfg(test)]
+    save_tests::crash_checkpoint(path, "temporary_open");
     file.write_all(bytes)?;
     file.sync_all()?;
     drop(file);
+    #[cfg(test)]
+    save_tests::crash_checkpoint(path, "temporary_synced");
 
     if path.exists() {
         if backup.exists() {
             fs::remove_file(&backup)?;
+            #[cfg(test)]
+            save_tests::crash_checkpoint(path, "backup_removed");
         }
         fs::rename(path, &backup)?;
+        #[cfg(test)]
+        save_tests::crash_checkpoint(path, "primary_rotated");
     }
     if let Err(error) = fs::rename(&temporary, path) {
         if backup.exists() && !path.exists() {
@@ -3823,6 +3833,8 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
         }
         return Err(error.into());
     }
+    #[cfg(test)]
+    save_tests::crash_checkpoint(path, "committed");
     Ok(())
 }
 

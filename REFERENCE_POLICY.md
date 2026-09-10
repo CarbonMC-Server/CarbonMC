@@ -1,5 +1,9 @@
 # Reference and licensing policy
 
+## Review on 2026-09-10: save process-crash and packaged restore acceptance
+
+Crash checkpoints, subprocess tests, save witnesses, and packaged acceptance tooling were independently written from Carbon's existing persistence and launcher contracts. No external server implementation, tests, data or assets were consulted or copied; no dependency was added. These tests establish only their recorded process-crash/restore scope and do not constitute physical power-loss or distribution clearance.
+
 ## Review on 2026-09-10: Fire Resistance effect
 
 The local Mojang-generated 26.2 registry report identifies minecraft:fire_resistance as effect ID 11; only this interoperability fact is embedded, and the report is not redistributed. Effect integration, hazard immunity, and tests were independently written against Carbon's existing APIs. No external implementation, tests, or assets were copied or adapted; no dependency was added. Brewing and full fire parity remain outside this milestone.

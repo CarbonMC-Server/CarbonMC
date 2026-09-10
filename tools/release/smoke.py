@@ -9,6 +9,8 @@ import subprocess
 import tempfile
 import zipfile
 
+from save_acceptance import run_save_acceptance
+
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
@@ -116,7 +118,8 @@ def main():
     invoke([str(launcher)], commands='stop\n', expected='server stopped cleanly')
     assert json.loads(save.read_text())['generator_version'] == 1
     assert list(bundle.glob('world-save.json.corrupt-*'))
-    report = {'platform': platform.platform(), 'package': packages[0], 'archive_sha256': sums[packages[0]],
+    save_report = run_save_acceptance(bundle, run, env)
+    report = {'save_acceptance': save_report['status'], 'platform': platform.platform(), 'package': packages[0], 'archive_sha256': sums[packages[0]],
               'build': info, 'file_count': len(manifest), 'checks': checks,
               'scope': 'Extracted artifact, sanitized runtime PATH; no real-client or power-loss acceptance.'}
     (run / 'result.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
