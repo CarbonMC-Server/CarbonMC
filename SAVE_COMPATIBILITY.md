@@ -38,7 +38,7 @@ For manual restore: stop Carbon, preserve current files elsewhere, and copy a kn
 
 `cargo test -p carbon-server save_tests` exercises real disposable files: unchanged legacy load then migration, metadata/rotation, future-payload downgrade rejection without mutation, corrupt-primary recovery and subsequent save, missing-primary interrupted rotation, ignored temporary files, unusable backups, and failed temporary writes. Existing workspace tests cover multi-dimension edits, item durability/equipment, containers/loot depletion, furnaces, effects, and restarts.
 
-The suite also kills a separate test process at six actual save-writer checkpoints: temporary open, temporary sync, backup removal, primary rotation, commit, and corrupt-primary quarantine. Each case reloads and saves again, checking the expected old/new committed block state and quarantine evidence. Pause hooks are compiled only into the test executable; shipped binaries contain none. These are process-crash tests, not hardware power-loss fault injection. The prototype does not sync parent-directory metadata, provide transactional snapshots across state locks/files, lock out a second writer, bound JSON input size, or guarantee durability on every filesystem. Rollback rename can also fail. Admin JSON files retain their separate existing writer behavior. No real saved world or running server is used by these tests. Chunk storage, async persistence, broader validation/fuzzing, and hardware power-loss acceptance remain future work. Packaged Windows/Linux acceptance is implemented below; execution evidence is pending.
+The suite also kills a separate test process at six actual save-writer checkpoints: temporary open, temporary sync, backup removal, primary rotation, commit, and corrupt-primary quarantine. Each case reloads and saves again, checking the expected old/new committed block state and quarantine evidence. Pause hooks are compiled only into the test executable; shipped binaries contain none. These are process-crash tests, not hardware power-loss fault injection. The prototype does not sync parent-directory metadata, provide transactional snapshots across state locks/files, lock out a second writer, bound JSON input size, or guarantee durability on every filesystem. Rollback rename can also fail. Admin JSON files retain their separate existing writer behavior. No real saved world or running server is used by these tests. Chunk storage, async persistence, broader validation/fuzzing, and hardware power-loss acceptance remain future work. Packaged Windows/Linux acceptance passed for the committed baseline recorded below.
 
 
 ## Packaged migration, restore, and crash acceptance
@@ -47,7 +47,7 @@ The suite also kills a separate test process at six actual save-writer checkpoin
 
 A non-empty schema-1 fixture is upgraded and restarted. Exact witnesses cover edits in all dimensions, player vitals/location, damaged tools/offhand equipment, Fire Resistance, chest contents and furnace output. Effect duration may decrease by bounded elapsed ticks; other witness data must remain exact. A copied independent binary/config/save snapshot is restored without changing its source. Corrupt/missing primary recovery ignores uncommitted temporary files; future schema/generator and unusable backups must fail without mutating save evidence. Finally, the packaged server is forcibly killed before and after its first autosave and restarted twice.
 
-`save-acceptance.json` records the binary hash, platform, process results, and success/failure. The release-validation workflow uploads it beside package smoke evidence for both native platforms. The acceptance oracle has mutation tests proving it rejects missing/changed gameplay data. Native platform results will be recorded here after CI completes.
+`save-acceptance.json` records the binary hash, platform, process results, and success/failure. The release-validation workflow uploads it beside package smoke evidence for both native platforms. The acceptance oracle has mutation tests proving it rejects missing/changed gameplay data. Native platform results are recorded below.
 
 **Gate 4 remains open for actual power-loss acceptance.** Process kills do not discard filesystem caches or exercise loss of directory metadata. Do not treat this suite as a guarantee against power interruption, multi-writer corruption, or all-files transactional consistency. Completing that requirement needs an isolated expendable VM/storage test environment and retained restart evidence; never power-cycle a user's working machine or a valued world for this test.
 
@@ -56,4 +56,23 @@ A non-empty schema-1 fixture is upgraded and restarted. Exact witnesses cover ed
 
 Windows 10 build 19045, local gnullvm standalone review package `carbon-0.1.0-local-review-ab3b8fe7a10f-x86_64-pc-windows-gnullvm`: all 17 save-acceptance checks and seven package smoke checks passed with sanitized runtime PATH; 147 package file hashes verified. Evidence is retained locally at `work/save-gate-smoke/package smoke v5i1o8p2/save-acceptance.json` and `result.json`. This package is a labeled local-review build, not native MSVC/Linux release sign-off.
 
-All 182 workspace tests passed; the child-process entry test is intentionally ignored during the ordinary harness run and explicitly invoked/killed by the passing crash parent test. Nine Python package/acceptance tests and formatting, compilation, and strict Clippy passed. Native Windows/Linux workflow evidence is pending publication of this change. Actual power-loss acceptance remains blocked by the lack of an expendable isolated test environment.
+All 182 workspace tests passed; the child-process entry test is intentionally ignored during the ordinary harness run and explicitly invoked/killed by the passing crash parent test. Nine Python package/acceptance tests and formatting, compilation, and strict Clippy passed. Native Windows/Linux workflow evidence is recorded below. Actual power-loss acceptance remains blocked by the lack of an expendable isolated test environment.
+
+
+### Native release acceptance — verified 2026-09-11
+
+**Process-crash and packaged migration/restore acceptance: complete for commit `96963773dde6102baeab793f556fc69bfef3dca3`.** [Release validation run 34498092749](https://github.com/CarbonMC-Server/CarbonMC/actions/runs/34498092749) passed all four jobs; [ordinary CI](https://github.com/CarbonMC-Server/CarbonMC/actions/runs/34498092750) also passed. This is a scoped acceptance result, not completion of the power-loss requirement or permission to publish a release.
+
+| Platform | Release build and independent archive comparison | Fresh-job package checks | Save acceptance |
+| --- | --- | --- | --- |
+| Windows Server 2022, x86_64 MSVC | Passed | 7 process checks; 146 file hashes | All 17 checks passed; real process kills before/after autosave |
+| Ubuntu 22.04, x86_64 GNU, glibc 2.35 | Passed | 7 process checks; 148 file hashes | All 17 checks passed; real process kills before/after autosave |
+
+The six save-writer crash checkpoints passed in the platform test suites. The downloaded `save-acceptance.json` reports were checked against the executable bytes inside their corresponding archives, and archive hashes matched `result.json`. Both build manifests identify the commit above. Review artifacts remain subject to the workflow's 14-day retention; hashes and this acceptance record are retained in source. Future candidate commits must run the workflow again.
+
+| Target | Executable SHA-256 | Binary archive SHA-256 |
+| --- | --- | --- |
+| x86_64-pc-windows-msvc | `8a83f1e6553dd7d8dc78139002da32ab005701eb2cd703bc441e62dee30a3f84` | `e7ff3580e1e650150af64b58930622628cf0f6f1d121a4bb4c1d5538e3985dde` |
+| x86_64-unknown-linux-gnu | `83e85d87bd2de7ebe5002f7ead591617e9dfbe7adf24892bf3384dff8eeb4f86` | `adebf86cfd8faed84eea887fb40d851f2d18a08fbadadde10c482a33e4b00abf` |
+
+Remaining gate-4 acceptance: actual power-loss/restart evidence on expendable isolated storage. The maintainer confirmed no such environment is available. The gate remains open; the production storage limitations listed above are unchanged.

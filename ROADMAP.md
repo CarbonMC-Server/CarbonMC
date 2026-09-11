@@ -120,7 +120,7 @@ Historical terrain generators, chunk/region storage, async persistence, actual p
 
 ## Save crash/restore acceptance — 2026-09-10
 
-Six forced-process-crash checkpoints exercise the real save writer in test subprocesses. Packaged acceptance now verifies non-empty legacy migration, independent snapshot restore, backup recovery, downgrade refusal without mutation, and real executable termination before/after autosave. The Windows local-review package passed all 17 save checks and seven package checks. Native Windows/Linux release acceptance is enforced by the release workflow and remains pending until its evidence is recorded in SAVE_COMPATIBILITY.md.
+Six forced-process-crash checkpoints exercise the real save writer in test subprocesses. Packaged acceptance now verifies non-empty legacy migration, independent snapshot restore, backup recovery, downgrade refusal without mutation, and real executable termination before/after autosave. The Windows local-review package passed all 17 save checks and seven package checks. Native Windows/Linux release acceptance passed for commit 9696377 in release-validation run 34498092749; both platforms passed all 17 save checks. Evidence and hashes are recorded in SAVE_COMPATIBILITY.md.
 
 Gate 4 is not complete: actual power-loss acceptance needs an expendable isolated environment, which is not currently available. Process termination does not test loss of OS/disk caches. See RELEASE_READINESS.md for the separate production-readiness requirements.
 

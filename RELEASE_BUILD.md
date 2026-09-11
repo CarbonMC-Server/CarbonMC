@@ -48,3 +48,8 @@ Source: `400067d4da2f25c525e8cc4209b6622ecd0fd80a`. [Release validation run](htt
 Download the workflow artifacts for the binary/source ZIPs and SHA256SUMS; each binary archive also contains FILES.sha256 and build/source manifests. These are validated review artifacts, not a published GitHub Release. Validation establishes these runner platforms, not every Windows/Linux version or production readiness.
 
 The regression fixtures also resolve their temporary root to match production path handling, avoiding Windows short-path aliases being mistaken for paths outside the source root. The production containment check was not relaxed.
+
+
+## Save acceptance baseline — verified 2026-09-11
+
+Commit `96963773dde6102baeab793f556fc69bfef3dca3` passed [release validation run 34498092749](https://github.com/CarbonMC-Server/CarbonMC/actions/runs/34498092749), including native Windows MSVC/Linux GNU builds, exact independent archive comparisons, and both fresh-job smoke checks. Each package passed all 17 non-empty save migration/restore/crash checks in addition to seven package checks. See SAVE_COMPATIBILITY.md for the executable/archive hashes and acceptance details. Gate 4 still requires actual power-loss evidence; gates 1 and 3 remain open.
