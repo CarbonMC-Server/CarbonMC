@@ -36,7 +36,7 @@ Release planning: see [RELEASE_READINESS.md](RELEASE_READINESS.md) for five prev
 - **Done:** enter play, stream playable chunks, track joins/leaves, and exchange keep-alives.
 - Add generated packet registries and golden fixtures for every connection state.
 - Implement login encryption, authentication, and compression.
-- Add bounded buffers, connection timeouts, rate limits, and fuzz tests.
+- **Done (transport baseline):** bounded global/per-IP connection admission, connection/packet/byte rate budgets, total setup and frame deadlines, write deadlines, cancellation-safe partial framing, and cooperative shutdown cleanup with adversarial transport/loopback tests. Comprehensive decoder/persistence fuzzing and bounds for world/save memory remain open.
 - Test status compatibility against supported client versions.
 
 ## Phase 2 — playable core

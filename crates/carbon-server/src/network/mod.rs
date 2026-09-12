@@ -1,3 +1,8 @@
+#[cfg(test)]
+mod adversarial_tests;
+mod transport;
+use transport::{Admissions, Budget, Connection};
+
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
@@ -35,16 +40,16 @@ use carbon_protocol::{
     encode_rotate_head, encode_select_known_packs, encode_set_cursor_item_with_glint,
     encode_set_entity_motion, encode_set_equipment_with_glint, encode_set_health,
     encode_set_player_inventory_with_glint, encode_string, encode_system_chat,
-    encode_update_enabled_features, encode_update_mob_effect, frame_packet, read_frame,
-    BlockLightSource, ChunkBlockState, ChunkLighting, ChunkTerrainStates, ConnectionState,
-    KnownPack, NextState, StatusDescription, StatusPlayers, StatusResponse, StatusVersion,
-    CONFIGURATION_SNAPSHOT, MINECRAFT_VERSION, PROTOCOL_VERSION,
+    encode_update_enabled_features, encode_update_mob_effect, frame_packet, BlockLightSource,
+    ChunkBlockState, ChunkLighting, ChunkTerrainStates, ConnectionState, KnownPack, NextState,
+    StatusDescription, StatusPlayers, StatusResponse, StatusVersion, CONFIGURATION_SNAPSHOT,
+    MINECRAFT_VERSION, PROTOCOL_VERSION,
 };
 use md5::{Digest, Md5};
 use tokio::{
-    io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
     sync::watch,
+    task::JoinSet,
     time::{self, timeout},
 };
 use tracing::{debug, info};
@@ -58,18 +63,27 @@ pub async fn serve(
 ) -> anyhow::Result<()> {
     info!(address = %config.bind, "network listener ready");
 
+    let admissions = Admissions::default();
+    let mut attempts = Budget::new(128, 64);
+    let mut tasks = JoinSet::new();
     loop {
         tokio::select! {
             result = listener.accept() => {
                 let (stream, remote) = result.context("failed to accept connection")?;
+                // Completed tasks count until reaped, bounding task bookkeeping too.
+                if tasks.len() >= transport::MAX_CONNECTIONS || !attempts.take(1) { continue; }
+                let Some(admission) = admissions.acquire(remote.ip()) else { continue; };
                 let config = config.clone();
                 let state = Arc::clone(&state);
-                tokio::spawn(async move {
-                    if let Err(error) = handle_connection(stream, remote, config, state).await {
+                let connection_shutdown = shutdown.clone();
+                tasks.spawn(async move {
+                    let _admission = admission;
+                    if let Err(error) = handle_connection(stream, remote, config, state, connection_shutdown).await {
                         debug!(%remote, %error, "connection closed");
                     }
                 });
             }
+            _ = tasks.join_next(), if !tasks.is_empty() => {}
             changed = shutdown.changed() => {
                 if changed.is_err() || *shutdown.borrow() {
                     break;
@@ -77,6 +91,7 @@ pub async fn serve(
             }
         }
     }
+    while tasks.join_next().await.is_some() {}
     info!("network listener stopped");
     Ok(())
 }
@@ -88,12 +103,15 @@ pub async fn bind(config: &ServerConfig) -> anyhow::Result<TcpListener> {
 }
 
 async fn handle_connection(
-    mut stream: TcpStream,
+    stream: TcpStream,
     remote: SocketAddr,
     config: ServerConfig,
     state: Arc<dyn ServerApi>,
+    shutdown: watch::Receiver<bool>,
 ) -> anyhow::Result<()> {
-    let first_packet = timeout(Duration::from_secs(10), read_frame(&mut stream))
+    let mut stream = Connection::new(stream);
+    stream.observe_shutdown(shutdown);
+    let first_packet = timeout(Duration::from_secs(10), stream.read_frame())
         .await
         .context("handshake timed out")??;
     let handshake = decode_handshake(&first_packet)?;
@@ -119,12 +137,12 @@ async fn handle_connection(
 }
 
 async fn handle_status(
-    stream: &mut TcpStream,
+    stream: &mut Connection,
     config: &ServerConfig,
     state: &dyn ServerApi,
     _requested_protocol: i32,
 ) -> anyhow::Result<()> {
-    let request = read_frame(stream).await?;
+    let request = stream.read_frame().await?;
     if request.as_slice() != [0] {
         bail!("expected status request packet");
     }
@@ -148,7 +166,7 @@ async fn handle_status(
         .write_all(&frame_packet(0, &encode_string(&json)))
         .await?;
 
-    let ping = read_frame(stream).await?;
+    let ping = stream.read_frame().await?;
     let (packet_id, consumed) = decode_varint(&ping)?;
     if packet_id != 1 || ping.len() != consumed + 8 {
         bail!("expected ping packet");
@@ -161,7 +179,7 @@ async fn handle_status(
 }
 
 async fn handle_login(
-    stream: &mut TcpStream,
+    stream: &mut Connection,
     client_protocol: i32,
     config: &ServerConfig,
     state: Arc<dyn ServerApi>,
@@ -176,7 +194,7 @@ async fn handle_login(
         .await;
     }
 
-    let packet = read_frame(stream).await?;
+    let packet = stream.read_frame().await?;
     let login = decode_login_start(&packet)?;
     debug!(
         username = %login.username,
@@ -212,7 +230,7 @@ async fn handle_login(
         ))
         .await?;
 
-    let acknowledgement = read_frame(stream).await?;
+    let acknowledgement = stream.read_frame().await?;
     decode_login_acknowledged(&acknowledgement)?;
     connection_state = ConnectionState::Configuration;
     debug!(username = %login.username, state = ?connection_state, "entering configuration state");
@@ -223,10 +241,11 @@ async fn handle_login(
         state = ?connection_state,
         "configuration completed; entering play state"
     );
+    stream.enter_play();
     handle_play(stream, &login.username, profile_id, config, state).await
 }
 
-async fn handle_configuration(stream: &mut TcpStream, username: &str) -> anyhow::Result<()> {
+async fn handle_configuration(stream: &mut Connection, username: &str) -> anyhow::Result<()> {
     stream
         .write_all(&encode_configuration_brand("Carbon"))
         .await?;
@@ -244,7 +263,7 @@ async fn handle_configuration(stream: &mut TcpStream, username: &str) -> anyhow:
         .await?;
 
     let selected_packs = loop {
-        let packet = read_frame(stream).await?;
+        let packet = stream.read_frame().await?;
         let (packet_id, _) = decode_varint(&packet)?;
         match packet_id {
             // Vanilla sends Client Information and its brand as configuration
@@ -267,13 +286,13 @@ async fn handle_configuration(stream: &mut TcpStream, username: &str) -> anyhow:
     );
 
     stream.write_all(CONFIGURATION_SNAPSHOT).await?;
-    let acknowledgement = read_frame(stream).await?;
+    let acknowledgement = stream.read_frame().await?;
     decode_finish_configuration(&acknowledgement)?;
     Ok(())
 }
 
 async fn handle_play(
-    stream: &mut TcpStream,
+    stream: &mut Connection,
     username: &str,
     profile_id: [u8; 16],
     config: &ServerConfig,
@@ -356,6 +375,10 @@ async fn handle_play(
     if !added {
         bail!("a player with UUID {player_id} is already connected");
     }
+    let _registration = PlayerRegistration {
+        state: Arc::clone(&state),
+        id: player_id,
+    };
     let joined_player = state
         .players()
         .into_iter()
@@ -459,9 +482,19 @@ async fn handle_play(
         },
     )
     .await;
-    state.remove_player(player_id);
+    drop(_registration);
     info!(%username, %player_id, "player left Carbon's starter world");
     result
+}
+
+struct PlayerRegistration {
+    state: Arc<dyn ServerApi>,
+    id: Uuid,
+}
+impl Drop for PlayerRegistration {
+    fn drop(&mut self) {
+        self.state.remove_player(self.id);
+    }
 }
 
 struct PlaySessionState {
@@ -518,7 +551,7 @@ fn visible_play_commands(state: &dyn ServerApi, username: &str) -> Vec<&'static 
 }
 
 async fn refresh_play_commands(
-    stream: &mut TcpStream,
+    stream: &mut Connection,
     state: &dyn ServerApi,
     username: &str,
     advertised: &mut Vec<&'static str>,
@@ -533,7 +566,7 @@ async fn refresh_play_commands(
 }
 
 async fn transition_dimension(
-    stream: &mut TcpStream,
+    stream: &mut Connection,
     state: &dyn ServerApi,
     player_id: Uuid,
     session: &mut PlaySessionState,
@@ -595,7 +628,7 @@ async fn transition_dimension(
 }
 
 async fn run_play_session(
-    stream: &mut TcpStream,
+    stream: &mut Connection,
     username: &str,
     player_id: Uuid,
     state: &dyn ServerApi,
@@ -668,7 +701,7 @@ async fn run_play_session(
     let result: anyhow::Result<()> = async {
         loop {
         tokio::select! {
-            packet = read_frame(stream) => {
+            packet = stream.read_frame() => {
                 let packet = packet?;
                 let (packet_id, _) = decode_varint(&packet)?;
                 if let Some(message) = decode_chat_message(&packet)? {
@@ -2940,7 +2973,7 @@ fn player_block_position(state: &dyn ServerApi, player_id: Uuid) -> BlockPositio
 }
 
 async fn sync_crafting_grid(
-    stream: &mut TcpStream,
+    stream: &mut Connection,
     grid: &[InventoryCursor; 4],
     state_id: i32,
 ) -> anyhow::Result<()> {
@@ -2967,7 +3000,7 @@ async fn sync_crafting_grid(
 }
 
 async fn sync_crafting_table_grid(
-    stream: &mut TcpStream,
+    stream: &mut Connection,
     grid: &[InventoryCursor; 9],
     state_id: i32,
 ) -> anyhow::Result<()> {
@@ -2994,7 +3027,7 @@ async fn sync_crafting_table_grid(
 }
 
 async fn sync_furnace(
-    stream: &mut TcpStream,
+    stream: &mut Connection,
     furnace: FurnaceSnapshot,
     state_id: i32,
 ) -> anyhow::Result<()> {
@@ -3036,7 +3069,7 @@ async fn sync_furnace(
 }
 
 async fn sync_chest(
-    stream: &mut TcpStream,
+    stream: &mut Connection,
     chest: ChestSnapshot,
     state_id: i32,
 ) -> anyhow::Result<()> {
@@ -3088,7 +3121,7 @@ fn return_crafting_table_grid(
 }
 
 async fn sync_player_inventory(
-    stream: &mut TcpStream,
+    stream: &mut Connection,
     state: &dyn ServerApi,
     player_id: Uuid,
     cursor: InventoryCursor,
@@ -3123,7 +3156,7 @@ async fn sync_player_inventory(
 }
 
 async fn sync_player_equipment_inventory(
-    stream: &mut TcpStream,
+    stream: &mut Connection,
     equipment: PlayerEquipment,
 ) -> anyhow::Result<()> {
     for (index, stack) in equipment.armor.into_iter().enumerate() {
@@ -3308,7 +3341,7 @@ fn item_position(item: &ItemEntitySnapshot) -> [f64; 3] {
 }
 
 async fn stream_visible_chunks(
-    stream: &mut TcpStream,
+    stream: &mut Connection,
     state: &dyn ServerApi,
     dimension: DimensionKind,
     center: ChunkPosition,
@@ -4174,7 +4207,7 @@ fn requires_spawn_rescue(x: f64, y: f64, z: f64) -> bool {
         || !(-32.0..=320.0).contains(&y)
 }
 
-async fn disconnect_login(stream: &mut TcpStream, message: &str) -> anyhow::Result<()> {
+async fn disconnect_login(stream: &mut Connection, message: &str) -> anyhow::Result<()> {
     let reason = serde_json::json!({ "text": message });
     stream
         .write_all(&frame_packet(0, &encode_string(&reason.to_string())))
@@ -4418,7 +4451,8 @@ mod tests {
         let mut client = TcpStream::connect(listener.local_addr().unwrap())
             .await
             .unwrap();
-        let (mut server, _) = listener.accept().await.unwrap();
+        let (server, _) = listener.accept().await.unwrap();
+        let mut server = super::Connection::new(server);
         let mut advertised = super::visible_play_commands(&state, "Helper");
         assert!(
             !super::refresh_play_commands(&mut server, &state, "Helper", &mut advertised)

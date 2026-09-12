@@ -19,7 +19,7 @@ Gates 2 and 5 are complete for the developer-preview baseline. Gates 1, 3 and 4 
 ## Eight major work areas before a production-ready public server
 
 1. **Identity/security:** online-mode encryption and account/session verification, authenticated identities/skins, and a defined signed-chat policy. Currently `online_mode = true` rejects login because secure authentication is unimplemented.
-2. **Protocol and abuse resistance:** compression, broader timeouts/rate limits, bounded resource usage, decoder/persistence fuzzing, and adversarial connection tests.
+2. **Protocol and abuse resistance:** connection transport baseline implemented: bounded global/per-IP admission, packet/byte budgets, setup/frame/write deadlines, cancellation-safe reads, and adversarial transport/loopback tests. Compression, comprehensive decoder/persistence fuzzing, save/world resource bounds, and broader adversarial/load acceptance remain open. See OPERATIONS.md for enforced limits; this is not completion of production abuse resistance.
 3. **Durable storage and upgrades:** chunk/region storage, async persistence, power-loss/crash testing and broader migration tooling beyond the implemented prototype schema/generator metadata and backup policy.
 4. **World generation:** full 3D biome/decorator rules, fluid/aquifer simulation, richer Nether/End generation, portal progression, structures and loot. Current terrain, cave material regions, static aquifers, islands, and portal fields are original prototypes, not vanilla parity.
 5. **Gameplay coverage:** remaining inventory/container/crafting rules, fluids/game rules, effects/brewing/projectiles, combat and enchantment parity, dimension-specific mobs, and clearly scoped remaining vanilla mechanics.

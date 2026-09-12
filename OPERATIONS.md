@@ -37,6 +37,26 @@ A redistributed binary's native runtime dependencies must be established by the 
 
 After the startup log, connect a Java 26.2 client to `localhost` (or the configured loopback port). Enter `version`, `help`, and `list` in the server console. Enter `stop` and wait for `server stopped cleanly` before copying data or closing the window. A forced termination can lose unsaved progress. `--help` describes supported arguments; there is no `--version` flag (use the console command).
 
+## Connection protection limits
+
+Carbon applies these fixed developer-preview transport limits before trusting a client. They count status checks and incomplete logins as well as players; operator status does not bypass them.
+
+| Limit | Behavior |
+| --- | --- |
+| Concurrent connections | 128 total, at most 8 per source IP; IPv4-mapped IPv6 shares the IPv4 quota. Excess sockets close without spawning a session. |
+| New connection tasks | Global token budget: 128 burst, refilling at 64 per second. |
+| Initial handshake | Must finish within 10 seconds. |
+| Status/login/configuration | Combined setup deadline of 30 seconds from acceptance. Successful intermediate packets do not extend it. |
+| Play frame | A complete frame within 30 seconds, including idle time before its first byte. Partial reads and server update ticks do not reset the deadline. |
+| Inbound frame size | Positive length, at most 2 MiB; malformed/overflowing prefixes are rejected before body allocation. |
+| Inbound packets | Per connection: 240 burst, refilling at 120 packets per second. |
+| Inbound bytes | Per connection: 2 MiB plus 5 bytes burst, refilling at 1 MiB per second; includes prefixes. |
+| Outbound write | Each complete write must finish within 10 seconds, also respecting setup's earlier deadline. |
+
+Exceeding a transport limit closes the connection. These are admission/input bounds, not a supported player-count or latency guarantee. Shared NAT/proxy addresses share the 8-connection quota; the limits are currently code constants, not configuration keys. Slow or unusually bursty clients can be disconnected. Keep offline/trusted-network restrictions in place: these controls do not provide authentication, DDoS protection, comprehensive parser fuzzing, or bounds on all world/save memory.
+
+Stopping the server interrupts pending connection I/O, drains session cleanup, and returns inventory cursors/crafting contents before the final save. Disconnected and failed-login sessions release their connection slots. Real-client acceptance of the limits remains a separate release gate.
+
 ## Configuration and data placement
 
 `--config` selects an existing TOML file; a missing file is an error and is not generated automatically. `--check` validates TOML and configuration fields without starting the server or binding a port. It does not test logging-filter syntax, save compatibility, port availability, or gameplay connectivity. Runtime startup performs those additional checks.

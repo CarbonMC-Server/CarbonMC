@@ -1,5 +1,9 @@
 # Reference and licensing policy
 
+## Review on 2026-09-11: connection transport protection
+
+Admission guards, token budgets, stateful framing, I/O deadlines, shutdown integration, and adversarial tests were independently written against Carbon's existing transport APIs. No external server source, tests, assets, or registry data were copied. The existing Tokio dependency enables its test-util feature only for tests; no new package dependency was added. The milestone is limited to transport protection and does not claim full production security or client acceptance.
+
 ## Review on 2026-09-10: save process-crash and packaged restore acceptance
 
 Crash checkpoints, subprocess tests, save witnesses, and packaged acceptance tooling were independently written from Carbon's existing persistence and launcher contracts. No external server implementation, tests, data or assets were consulted or copied; no dependency was added. These tests establish only their recorded process-crash/restore scope and do not constitute physical power-loss or distribution clearance.

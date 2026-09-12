@@ -101,13 +101,14 @@ impl CarbonServer {
         info!("server stopping");
         extensions.emit(&Event::ServerStopping).await;
         extensions.disable_all().await;
+        // Drain connection cleanup (including inventory cursors) before the final snapshot.
+        network_task.await.context("network task panicked")??;
+        tick_task.await.context("tick task panicked")?;
+        console_task.await.context("console task panicked")?;
         state
             .save()
             .context("failed to save world during shutdown")?;
 
-        network_task.await.context("network task panicked")??;
-        tick_task.await.context("tick task panicked")?;
-        console_task.await.context("console task panicked")?;
         signal_task.abort();
         info!("server stopped cleanly");
         Ok(())
