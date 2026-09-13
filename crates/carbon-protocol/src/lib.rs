@@ -22,9 +22,9 @@ pub use packet::{
 };
 pub use play::{
     decode_attack, decode_chat_command, decode_chat_message, decode_client_command,
-    decode_container_click, decode_container_close, decode_interact_entity, decode_player_action,
-    decode_player_command, decode_player_movement, decode_player_rotation, decode_set_carried_item,
-    decode_swing, decode_use_item, decode_use_item_on, encode_add_entity,
+    decode_container_click, decode_container_close, decode_interact_entity, decode_keep_alive,
+    decode_player_action, decode_player_command, decode_player_movement, decode_player_rotation,
+    decode_set_carried_item, decode_swing, decode_use_item, decode_use_item_on, encode_add_entity,
     encode_add_entity_with_rotation, encode_animate, encode_block_changed_ack, encode_block_update,
     encode_change_difficulty, encode_chunk_batch_finished, encode_chunk_batch_start,
     encode_chunk_cache_center, encode_commands, encode_container_set_data,
@@ -51,3 +51,6 @@ pub const MAX_PACKET_SIZE: usize = 2 * 1024 * 1024;
 pub const MINECRAFT_VERSION: &str = "26.2";
 /// Protocol number embedded in Mojang's official 26.2 server metadata.
 pub const PROTOCOL_VERSION: i32 = 776;
+
+#[cfg(test)]
+mod adversarial_tests;

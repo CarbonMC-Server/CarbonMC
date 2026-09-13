@@ -37,6 +37,7 @@ Release planning: see [RELEASE_READINESS.md](RELEASE_READINESS.md) for five prev
 - Add generated packet registries and golden fixtures for every connection state.
 - Implement login encryption, authentication, and compression.
 - **Done (transport baseline):** bounded global/per-IP connection admission, connection/packet/byte rate budgets, total setup and frame deadlines, write deadlines, cancellation-safe partial framing, and cooperative shutdown cleanup with adversarial transport/loopback tests. Comprehensive decoder/persistence fuzzing and bounds for world/save memory remain open.
+- **Done (decoder/heartbeat baseline):** validate matching keepalive replies and deadlines; reject overflowing integers, empty frames, unsafe login names, and non-finite combined movement rotations; exercise all exported decoders with deterministic malformed inputs. Authenticated login, comprehensive fuzzing and real-client security acceptance remain open.
 - Test status compatibility against supported client versions.
 
 ## Phase 2 — playable core

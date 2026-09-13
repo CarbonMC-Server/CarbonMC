@@ -1,5 +1,9 @@
 # Reference and licensing policy
 
+## Review on 2026-09-13: decoder validation and keepalive enforcement
+
+Packet validation, heartbeat state and malformed-input tests were independently written against Carbon APIs. The local official 26.2 server confirms only the keepalive interoperability facts: serverbound play packet 28 carries one signed 64-bit value. No implementation or artifact was copied into the repository. No dependency was added. Authentication research identified the upstream RSA timing advisory (https://github.com/RustCrypto/RSA/security/advisories/GHSA-c38w-74pg-36hr); that dependency was not introduced and authenticated login remains unimplemented. This work does not close production security or real-client acceptance.
+
 ## Review on 2026-09-11: connection transport protection
 
 Admission guards, token budgets, stateful framing, I/O deadlines, shutdown integration, and adversarial tests were independently written against Carbon's existing transport APIs. No external server source, tests, assets, or registry data were copied. The existing Tokio dependency enables its test-util feature only for tests; no new package dependency was added. The milestone is limited to transport protection and does not claim full production security or client acceptance.

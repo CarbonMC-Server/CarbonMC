@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod adversarial_tests;
+mod keepalive;
 mod transport;
 use transport::{Admissions, Budget, Connection};
 
@@ -22,8 +23,8 @@ use carbon_config::ServerConfig;
 use carbon_protocol::{
     decode_attack, decode_chat_command, decode_chat_message, decode_client_command,
     decode_container_click, decode_container_close, decode_finish_configuration, decode_handshake,
-    decode_interact_entity, decode_login_acknowledged, decode_login_start, decode_player_action,
-    decode_player_command, decode_player_movement, decode_player_rotation,
+    decode_interact_entity, decode_keep_alive, decode_login_acknowledged, decode_login_start,
+    decode_player_action, decode_player_command, decode_player_movement, decode_player_rotation,
     decode_select_known_packs, decode_set_carried_item, decode_swing, decode_use_item,
     decode_use_item_on, decode_varint, encode_add_entity, encode_add_entity_with_rotation,
     encode_animate, encode_block_changed_ack, encode_block_update, encode_change_difficulty,
@@ -636,6 +637,8 @@ async fn run_play_session(
 ) -> anyhow::Result<()> {
     let mut keep_alive = time::interval(Duration::from_secs(10));
     keep_alive.tick().await;
+    keep_alive.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
+    let mut heartbeat = keepalive::Heartbeat::default();
     let mut entity_updates = time::interval(Duration::from_millis(50));
     entity_updates.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
     entity_updates.tick().await;
@@ -703,6 +706,10 @@ async fn run_play_session(
         tokio::select! {
             packet = stream.read_frame() => {
                 let packet = packet?;
+                if let Some(id) = decode_keep_alive(&packet)? {
+                    heartbeat.acknowledge(id)?;
+                    continue;
+                }
                 let (packet_id, _) = decode_varint(&packet)?;
                 if let Some(message) = decode_chat_message(&packet)? {
                     let tick = state.current_tick();
@@ -1909,8 +1916,9 @@ async fn run_play_session(
                 }
             }
             _ = keep_alive.tick() => {
-                let id = i64::try_from(state.current_tick()).unwrap_or(i64::MAX);
-                stream.write_all(&encode_keep_alive(id)).await?;
+                if let Some(id) = heartbeat.request()? {
+                    stream.write_all(&encode_keep_alive(id)).await?;
+                }
             }
         }
         }

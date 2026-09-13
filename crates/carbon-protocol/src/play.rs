@@ -923,6 +923,10 @@ pub fn decode_player_movement(packet: &[u8]) -> Result<Option<PlayerMovement>, P
     } else {
         (None, None, body[24])
     };
+    if yaw.is_some_and(|value| !value.is_finite()) || pitch.is_some_and(|value| !value.is_finite())
+    {
+        return Err(PacketError::InvalidLength(-1));
+    }
     Ok(Some(PlayerMovement {
         x,
         y,
@@ -1715,4 +1719,41 @@ mod tests {
             (42, 9)
         );
     }
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+
+    #[test]
+    fn combined_movement_rejects_nonfinite_rotation() {
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            for offset in [24, 28] {
+                let mut body = vec![0_u8; 33];
+                body[offset..offset + 4].copy_from_slice(&bad.to_be_bytes());
+                let mut packet = BytesMut::new();
+                encode_varint(SERVERBOUND_MOVE_PLAYER_POS_ROT_ID, &mut packet);
+                packet.extend_from_slice(&body);
+                assert!(decode_player_movement(&packet).is_err());
+            }
+        }
+    }
+}
+
+/// Decodes the 26.2 play keepalive response (packet 28, signed 64-bit nonce).
+pub fn decode_keep_alive(packet: &[u8]) -> Result<Option<i64>, PacketError> {
+    let (id, consumed) = decode_varint(packet)?;
+    if id != 28 {
+        return Ok(None);
+    }
+    let body = &packet[consumed..];
+    if body.len() < 8 {
+        return Err(PacketError::UnexpectedEnd);
+    }
+    if body.len() > 8 {
+        return Err(PacketError::TrailingBytes);
+    }
+    Ok(Some(i64::from_be_bytes(
+        body.try_into().map_err(|_| PacketError::UnexpectedEnd)?,
+    )))
 }

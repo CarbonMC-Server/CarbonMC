@@ -27,6 +27,9 @@ pub fn decode_varint(source: &[u8]) -> Result<(i32, usize), VarIntError> {
         let Some(&byte) = source.get(index) else {
             return Err(VarIntError::Incomplete);
         };
+        if index == 4 && byte & 0xf0 != 0 {
+            return Err(VarIntError::TooLarge);
+        }
         result |= u32::from(byte & 0x7f) << (7 * index);
         if byte & 0x80 == 0 {
             return Ok((result as i32, index + 1));
@@ -46,6 +49,21 @@ mod tests {
             encode_varint(value, &mut bytes);
             assert_eq!(decode_varint(&bytes), Ok((value, bytes.len())));
         }
+    }
+
+    #[test]
+    fn rejects_every_overflowing_fifth_byte() {
+        for last in 16..=255 {
+            assert_eq!(
+                decode_varint(&[0xff, 0xff, 0xff, 0xff, last]),
+                Err(VarIntError::TooLarge)
+            );
+        }
+        assert_eq!(decode_varint(&[0xff, 0xff, 0xff, 0xff, 0x0f]), Ok((-1, 5)));
+        assert_eq!(
+            decode_varint(&[0x80, 0x80, 0x80, 0x80, 0x08]),
+            Ok((i32::MIN, 5))
+        );
     }
 
     #[test]

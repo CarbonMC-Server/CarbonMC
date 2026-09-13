@@ -76,6 +76,8 @@ pub enum PacketError {
     TrailingBytes,
     #[error("login username cannot be empty")]
     EmptyUsername,
+    #[error("login username must contain only ASCII letters, digits, or underscores")]
+    InvalidUsername,
 }
 
 /// Reads one length-prefixed Minecraft packet body.
@@ -84,7 +86,7 @@ where
     R: AsyncRead + Unpin,
 {
     let length = read_varint_async(reader).await?;
-    if length < 0 {
+    if length <= 0 {
         return Err(PacketError::InvalidLength(length));
     }
     let length = usize::try_from(length).map_err(|_| PacketError::InvalidLength(length))?;
@@ -152,6 +154,12 @@ pub fn decode_login_start(packet: &[u8]) -> Result<LoginStart, PacketError> {
     let username = cursor.string(16)?;
     if username.is_empty() {
         return Err(PacketError::EmptyUsername);
+    }
+    if !username
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+    {
+        return Err(PacketError::InvalidUsername);
     }
     let player_id = cursor.bytes::<16>()?;
     if !cursor.is_empty() {
@@ -368,6 +376,17 @@ pub fn encode_string(value: &str) -> Vec<u8> {
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    async fn rejects_invalid_frame_lengths_before_reading_payload() {
+        for input in [
+            &[0][..],
+            &[0x81, 0x80, 0x80, 0x80, 0x10][..],
+            &[0xff, 0xff, 0xff, 0xff, 0x0f][..],
+        ] {
+            assert!(read_frame(&mut &input[..]).await.is_err());
+        }
+    }
+
     #[test]
     fn decodes_a_status_handshake() {
         let mut packet = BytesMut::new();
@@ -395,6 +414,23 @@ mod tests {
         let result = decode_login_start(&packet).expect("valid login start");
         assert_eq!(result.username, "CarbonPlayer");
         assert_eq!(result.player_id, player_id);
+    }
+
+    #[test]
+    fn login_names_cannot_inject_control_characters_or_unicode_aliases() {
+        for name in ["a\nb", "a b", "a\0b", "a\u{1b}b", "Admіn", "a/b"] {
+            let mut packet = vec![0];
+            packet.extend(encode_string(name));
+            packet.extend([0; 16]);
+            assert!(matches!(
+                decode_login_start(&packet),
+                Err(PacketError::InvalidUsername)
+            ));
+        }
+        let mut packet = vec![0];
+        packet.extend(encode_string("Player_012345678"));
+        packet.extend([0; 16]);
+        assert!(decode_login_start(&packet).is_ok());
     }
 
     #[test]
