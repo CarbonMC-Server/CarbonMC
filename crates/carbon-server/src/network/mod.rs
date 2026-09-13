@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod adversarial_tests;
+mod compression;
 mod keepalive;
 mod transport;
 use transport::{Admissions, Budget, Connection};
@@ -215,6 +216,7 @@ async fn handle_login(
         return disconnect_login(stream, &reason).await;
     }
 
+    stream.enable_compression().await?;
     let profile_id = offline_player_id(&login.username);
     let mut connection_state = ConnectionState::Login;
     let session_id = *uuid::Uuid::new_v4().as_bytes();

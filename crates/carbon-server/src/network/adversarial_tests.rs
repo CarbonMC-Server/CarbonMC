@@ -120,3 +120,75 @@ fn dropped_player_registration_removes_joined_state() {
     drop(registration);
     assert!(state.players().is_empty());
 }
+
+#[tokio::test]
+async fn login_negotiates_compression_before_finished_and_configuration() {
+    let (address, shutdown, task) = listener().await;
+    let mut socket = TcpStream::connect(address).await.unwrap();
+    let mut handshake = BytesMut::new();
+    carbon_protocol::encode_varint(PROTOCOL_VERSION, &mut handshake);
+    handshake.extend(encode_string("localhost"));
+    handshake.put_u16(address.port());
+    carbon_protocol::encode_varint(2, &mut handshake);
+    socket
+        .write_all(&frame_packet(0, &handshake))
+        .await
+        .unwrap();
+    let mut login = encode_string("CompressionTest");
+    login.extend([0; 16]);
+    socket.write_all(&frame_packet(0, &login)).await.unwrap();
+    let negotiation = timeout(
+        Duration::from_secs(2),
+        carbon_protocol::read_frame(&mut socket),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(negotiation, [3, 0x80, 2]);
+    let finished =
+        compression::decode(carbon_protocol::read_frame(&mut socket).await.unwrap()).unwrap();
+    assert_eq!(finished[0], 2);
+    // A small packet uses an uncompressed envelope after negotiation.
+    socket.write_all(&[2, 0, 3]).await.unwrap();
+    let brand =
+        compression::decode(carbon_protocol::read_frame(&mut socket).await.unwrap()).unwrap();
+    assert_eq!(brand[0], 1);
+    assert!(brand.windows(6).any(|value| value == b"Carbon"));
+    // Complete the expected configuration responses and validate the entire
+    // bundled registry snapshot through the real compressed transport.
+    for id in [12, 14] {
+        let packet =
+            compression::decode(carbon_protocol::read_frame(&mut socket).await.unwrap()).unwrap();
+        assert_eq!(packet[0], id);
+    }
+    let mut selection = vec![1];
+    for value in ["minecraft", "core", MINECRAFT_VERSION] {
+        selection.extend(encode_string(value));
+    }
+    socket
+        .write_all(&compression::encode_frames(&frame_packet(7, &selection)).unwrap())
+        .await
+        .unwrap();
+    let mut reconstructed = Vec::new();
+    timeout(Duration::from_secs(5), async {
+        loop {
+            let packet =
+                compression::decode(carbon_protocol::read_frame(&mut socket).await.unwrap())
+                    .unwrap();
+            let (id, prefix) = decode_varint(&packet).unwrap();
+            reconstructed.extend(frame_packet(id, &packet[prefix..]));
+            if packet == [3] {
+                break;
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(reconstructed, CONFIGURATION_SNAPSHOT);
+    shutdown.send(true).unwrap();
+    timeout(Duration::from_secs(2), task)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+}

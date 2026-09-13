@@ -107,6 +107,8 @@ pub(super) struct Connection<S = TcpStream> {
     shutdown: Option<tokio::sync::watch::Receiver<bool>>,
     frames: Budget,
     bytes: Budget,
+    decoded_bytes: Budget,
+    compression: bool,
 }
 impl<S: AsyncRead + AsyncWrite + Unpin> Connection<S> {
     pub(super) fn new(stream: S) -> Self {
@@ -120,6 +122,8 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Connection<S> {
             setup_deadline: Some(Instant::now() + SETUP_TIMEOUT),
             frames: Budget::new(240, 120),
             bytes: Budget::new(MAX_PACKET_SIZE + 5, 1024 * 1024),
+            decoded_bytes: Budget::new(MAX_PACKET_SIZE, 1024 * 1024),
+            compression: false,
         }
     }
     pub(super) fn observe_shutdown(&mut self, shutdown: tokio::sync::watch::Receiver<bool>) {
@@ -132,7 +136,25 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Connection<S> {
         self.setup_deadline
             .map_or(normal, |setup| setup.min(normal))
     }
+    pub(super) async fn enable_compression(&mut self) -> io::Result<()> {
+        if self.compression || !self.prefix.is_empty() || !self.payload.is_empty() {
+            return Err(io::Error::other("invalid compression state transition"));
+        }
+        let mut threshold = bytes::BytesMut::new();
+        carbon_protocol::encode_varint(super::compression::THRESHOLD as i32, &mut threshold);
+        self.write_all(&carbon_protocol::frame_packet(3, &threshold))
+            .await?;
+        self.compression = true;
+        Ok(())
+    }
     pub(super) async fn write_all(&mut self, bytes: &[u8]) -> io::Result<()> {
+        let encoded;
+        let bytes = if self.compression {
+            encoded = super::compression::encode_frames(bytes)?;
+            encoded.as_slice()
+        } else {
+            bytes
+        };
         let deadline = self.deadline(Instant::now() + WRITE_TIMEOUT);
         tokio::select! {
             biased;
@@ -220,7 +242,15 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Connection<S> {
                 self.prefix.clear();
                 self.received = 0;
                 self.frame_deadline = None;
-                return Ok(std::mem::take(&mut self.payload));
+                let payload = std::mem::take(&mut self.payload);
+                if self.compression {
+                    let length = super::compression::decoded_length(&payload)?;
+                    if !self.decoded_bytes.take(length) {
+                        return Err(io::Error::other("decompressed byte rate exceeded").into());
+                    }
+                    return Ok(super::compression::decode(payload)?);
+                }
+                return Ok(payload);
             }
         }
     }
@@ -252,6 +282,53 @@ mod tests {
     use super::*;
     use tokio::io::duplex;
     use tokio::time::{advance, timeout};
+
+    #[tokio::test(start_paused = true)]
+    async fn compression_transition_preserves_partial_reads_and_charges_expansion() {
+        let (mut peer, socket) = duplex(4096);
+        let mut connection = Connection::new(socket);
+        connection.enable_compression().await.unwrap();
+        assert_eq!(
+            carbon_protocol::read_frame(&mut peer).await.unwrap(),
+            [3, 0x80, 2]
+        );
+        assert!(connection.enable_compression().await.is_err());
+        let original = carbon_protocol::frame_packet(7, &[42; 1023]);
+        let encoded = super::super::compression::encode_frames(&original).unwrap();
+        peer.write_all(&encoded[..3]).await.unwrap();
+        assert!(timeout(Duration::from_secs(1), connection.read_frame())
+            .await
+            .is_err());
+        peer.write_all(&encoded[3..]).await.unwrap();
+        assert_eq!(
+            connection.read_frame().await.unwrap(),
+            [vec![7], vec![42; 1023]].concat()
+        );
+        // A tiny compressed frame cannot bypass the decoded-byte budget.
+        connection.decoded_bytes = Budget::new(1023, 0);
+        peer.write_all(&encoded).await.unwrap();
+        assert!(
+            matches!(connection.read_frame().await, Err(PacketError::Io(error)) if error.to_string().contains("decompressed byte rate"))
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn compression_writes_multiple_complete_frames() {
+        let (mut peer, socket) = duplex(4096);
+        let mut connection = Connection::new(socket);
+        connection.enable_compression().await.unwrap();
+        carbon_protocol::read_frame(&mut peer).await.unwrap();
+        let mut frames = carbon_protocol::frame_packet(7, &[]);
+        frames.extend(carbon_protocol::frame_packet(8, &[42; 512]));
+        connection.write_all(&frames).await.unwrap();
+        for expected in [vec![7], [vec![8], vec![42; 512]].concat()] {
+            let envelope = carbon_protocol::read_frame(&mut peer).await.unwrap();
+            assert_eq!(
+                super::super::compression::decode(envelope).unwrap(),
+                expected
+            );
+        }
+    }
 
     #[tokio::test(start_paused = true)]
     async fn cancelled_reads_preserve_prefix_body_and_next_frame() {

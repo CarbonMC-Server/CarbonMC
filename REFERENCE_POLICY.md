@@ -1,5 +1,11 @@
 # Reference and licensing policy
 
+## Review on 2026-09-13: bounded packet compression
+
+Compression envelopes, negotiation, limits and tests were independently implemented from Carbon APIs and the local official 26.2 login packet registration (Set Compression ID 3). No external server code or fixtures were copied. One synthetic fixture was generated independently using Python zlib. Consulted flate2 API documentation (https://docs.rs/flate2/1.1.10/flate2/struct.Decompress.html) for bounded output, stream completion and consumed/produced byte counters.
+
+New locked packages and declared licenses: flate2 1.1.10 and crc32fast 1.5.2 (MIT OR Apache-2.0), miniz_oxide 0.9.1 (MIT OR Zlib OR Apache-2.0), adler2 2.0.1 (0BSD OR MIT OR Apache-2.0), simd-adler32 0.3.10 (MIT). Their local license files were inventoried and the existing release collector includes these notices. The Rust backend avoids a new system-zlib runtime requirement. This scoped inventory does not close the repository-wide provenance gate.
+
 ## Review on 2026-09-13: decoder validation and keepalive enforcement
 
 Packet validation, heartbeat state and malformed-input tests were independently written against Carbon APIs. The local official 26.2 server confirms only the keepalive interoperability facts: serverbound play packet 28 carries one signed 64-bit value. No implementation or artifact was copied into the repository. No dependency was added. Authentication research identified the upstream RSA timing advisory (https://github.com/RustCrypto/RSA/security/advisories/GHSA-c38w-74pg-36hr); that dependency was not introduced and authenticated login remains unimplemented. This work does not close production security or real-client acceptance.

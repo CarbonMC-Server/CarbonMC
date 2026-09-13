@@ -98,3 +98,11 @@ See [SAVE_COMPATIBILITY.md](SAVE_COMPATIBILITY.md) for the full compatibility/re
 Play connections receive one outstanding keepalive challenge at a time. Only its matching response is accepted, once and before the 30-second response deadline; unsolicited, mismatched, duplicate and expired replies terminate the session. The 10-second heartbeat timer checks missing responses without extending the deadline. Other client traffic does not acknowledge a challenge.
 
 Login names must be 1–16 ASCII letters, digits or underscores. This is input validation, not account authentication: offline users can still impersonate another valid name. Framing rejects empty bodies and overflowing five-byte integers; combined movement packets reject non-finite rotation values. Deterministic malformed-input coverage exercises every exported packet decoder, including short and maximum-sized payloads. This is not a completed fuzzing or production-security assessment.
+
+### Bounded packet compression
+
+Successful offline login now sends Set Compression before Login Finished, using a fixed 256-byte threshold. All following configuration/play traffic uses compression envelopes; packets below the threshold remain uncompressed inside those envelopes. Status traffic and pre-negotiation rejection messages use ordinary frames.
+
+Each wire frame and declared decompressed packet is limited to 2 MiB. Compressed connections additionally enforce a decompressed traffic budget of 2 MiB burst and 1 MiB/second, charged before allocation or inflation. The existing wire-byte and packet budgets still apply. Each incoming packet must contain exactly one complete zlib stream with the declared output size and no trailing bytes. The decoder allocates at most the declared size plus one sentinel byte; it never grows output from untrusted stream contents. Invalid sizes, checksum failures, truncated streams and threshold violations close the connection.
+
+Automated coverage includes threshold boundaries, maximum output size, an independently generated Python-zlib fixture, expansion/size lies, corruption/truncation, cancellation during a compressed frame, decompressed rate rejection, and a real loopback login reconstructing the complete configuration snapshot byte-for-byte. Two licensed real-client checks remain outstanding; compression adds neither encryption nor identity verification.
