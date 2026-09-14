@@ -1,5 +1,9 @@
 # Reference and licensing policy
 
+## Review on 2026-09-15: bounded world-save I/O
+
+Read limits, bounded serialization and preservation tests were independently implemented from Carbon persistence APIs using existing standard-library and serde interfaces. No external server source, assets or tests were copied; no dependency was added. The 16 MiB cap is a prototype operational limit, not production storage acceptance.
+
 ## Review on 2026-09-13: bounded packet compression
 
 Compression envelopes, negotiation, limits and tests were independently implemented from Carbon APIs and the local official 26.2 login packet registration (Set Compression ID 3). No external server code or fixtures were copied. One synthetic fixture was generated independently using Python zlib. Consulted flate2 API documentation (https://docs.rs/flate2/1.1.10/flate2/struct.Decompress.html) for bounded output, stream completion and consumed/produced byte counters.

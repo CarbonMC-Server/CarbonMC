@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeSet, HashMap, HashSet, VecDeque},
     fs::{self, OpenOptions},
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -24,6 +24,7 @@ use tokio::sync::watch;
 use tracing::info;
 use uuid::Uuid;
 
+const MAX_SAVE_BYTES: usize = 16 * 1024 * 1024;
 const CURRENT_SAVE_SCHEMA_VERSION: u32 = 2;
 const CURRENT_GENERATOR_VERSION: u32 = 1;
 const OLDEST_SUPPORTED_SAVE_SCHEMA_VERSION: u32 = 1;
@@ -1246,7 +1247,7 @@ impl ServerState {
             furnaces,
             chests,
         };
-        write_world_save(path, &serde_json::to_vec_pretty(&data)?)?;
+        write_world_save(path, &encode_save(&data)?)?;
         Ok(())
     }
 
@@ -3734,7 +3735,63 @@ fn validate_save_version(value: &serde_json::Value) -> anyhow::Result<()> {
     Ok(())
 }
 
+// A size rejection is an I/O failure, not a corrupt-save fallback: never
+// silently replace an oversized primary with an older backup.
+fn read_bounded_save(path: &Path) -> std::io::Result<Vec<u8>> {
+    let file = fs::File::open(path)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() || metadata.len() > MAX_SAVE_BYTES as u64 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "world save must be a regular file no larger than 16 MiB",
+        ));
+    }
+    let mut bytes = Vec::new();
+    // Metadata is only an early check. Bound the actual read too, including
+    // files that grow between metadata inspection and the read.
+    file.take(MAX_SAVE_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > MAX_SAVE_BYTES {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "world save exceeds 16 MiB limit",
+        ));
+    }
+    Ok(bytes)
+}
+
+struct LimitedSaveWriter {
+    bytes: Vec<u8>,
+    limit: usize,
+}
+impl Write for LimitedSaveWriter {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if bytes.len() > self.limit.saturating_sub(self.bytes.len()) {
+            return Err(std::io::Error::other(
+                "world save exceeds serialization limit",
+            ));
+        }
+        self.bytes.extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+fn encode_save(data: &SaveData) -> anyhow::Result<Vec<u8>> {
+    let mut writer = LimitedSaveWriter {
+        bytes: Vec::new(),
+        limit: MAX_SAVE_BYTES,
+    };
+    serde_json::to_writer_pretty(&mut writer, data)?;
+    Ok(writer.bytes)
+}
+
 fn decode_save(bytes: &[u8]) -> anyhow::Result<SaveData> {
+    anyhow::ensure!(
+        bytes.len() <= MAX_SAVE_BYTES,
+        "world save exceeds 16 MiB limit"
+    );
     let value = serde_json::from_slice(bytes)?;
     validate_save_version(&value)?;
     Ok(serde_json::from_value(value)?)
@@ -3742,7 +3799,7 @@ fn decode_save(bytes: &[u8]) -> anyhow::Result<SaveData> {
 
 fn load_save_file(path: &Path) -> anyhow::Result<Option<SaveData>> {
     let backup = path.with_extension("json.bak");
-    match fs::read(path) {
+    match read_bounded_save(path) {
         Ok(bytes) => {
             let parsed = match serde_json::from_slice::<serde_json::Value>(&bytes) {
                 Ok(value) => {
@@ -3760,29 +3817,35 @@ fn load_save_file(path: &Path) -> anyhow::Result<Option<SaveData>> {
                     Ok(Some(data))
                 }
                 Err(primary_error) => {
-                    let bytes = fs::read(&backup).map_err(|error| anyhow::anyhow!(
+                    let bytes = read_bounded_save(&backup).map_err(|error| anyhow::anyhow!(
                         "invalid primary save ({primary_error}); cannot read backup {}: {error}", backup.display()))?;
                     tracing::warn!(path = %backup.display(), "primary save was invalid; loading backup");
                     decode_save(&bytes).map(Some)
                 }
             }
         }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => match fs::read(&backup) {
-            Ok(bytes) => {
-                tracing::warn!(path = %backup.display(), "primary save was missing; loading backup");
-                decode_save(&bytes).map(Some)
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            match read_bounded_save(&backup) {
+                Ok(bytes) => {
+                    tracing::warn!(path = %backup.display(), "primary save was missing; loading backup");
+                    decode_save(&bytes).map(Some)
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+                Err(error) => Err(error.into()),
             }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(error) => Err(error.into()),
-        },
+        }
         Err(error) => Err(error.into()),
     }
 }
 
 fn write_world_save(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        bytes.len() <= MAX_SAVE_BYTES,
+        "world save exceeds 16 MiB limit"
+    );
     // Recheck before writing, including files replaced externally while the server ran.
     load_save_file(path)?;
-    match fs::read(path) {
+    match read_bounded_save(path) {
         Ok(primary) if decode_save(&primary).is_err() => {
             // Retain evidence and leave the known-good backup intact through replacement.
             let quarantine = path.with_extension(format!("json.corrupt-{}", Uuid::new_v4()));

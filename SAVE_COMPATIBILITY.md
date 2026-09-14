@@ -76,3 +76,9 @@ The six save-writer crash checkpoints passed in the platform test suites. The do
 | x86_64-unknown-linux-gnu | `83e85d87bd2de7ebe5002f7ead591617e9dfbe7adf24892bf3384dff8eeb4f86` | `adebf86cfd8faed84eea887fb40d851f2d18a08fbadadde10c482a33e4b00abf` |
 
 Remaining gate-4 acceptance: actual power-loss/restart evidence on expendable isolated storage. The maintainer confirmed no such environment is available. The gate remains open; the production storage limitations listed above are unchanged.
+
+### Save-file resource limit (2026-09-15)
+
+The prototype JSON world save has a hard 16 MiB limit. Loading checks both the opened file's metadata and the actual bytes read; primary and backup reads are bounded. An oversized primary fails closed without falling back to its backup, quarantining it or changing any save file. An oversized backup fails when recovery requires it. Serialization is also bounded before creating a temporary file or rotating the primary/backup.
+
+If saving exceeds this limit, the existing disk snapshot remains unchanged and newer in-memory progress is not committed. Treat the reported save error as an operational failure. Keep the current process and prior backups intact while arranging a supported export/storage upgrade; do not delete the primary to bypass the limit. This byte limit does not bound all live world data, JSON parser overhead, administrative files or storage usage, and does not establish production storage safety.

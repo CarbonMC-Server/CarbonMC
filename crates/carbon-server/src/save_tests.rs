@@ -307,3 +307,60 @@ fn forced_process_crashes_preserve_committed_state() {
         println!("forced process crash recovery passed: {stage}");
     }
 }
+
+#[test]
+fn oversized_primary_never_falls_back_or_mutates_files() {
+    let f = Fixture::new();
+    f.write(&f.backup(), &current());
+    let backup = fs::read(f.backup()).unwrap();
+    let file = fs::File::create(f.primary()).unwrap();
+    file.set_len(MAX_SAVE_BYTES as u64 + 1).unwrap();
+    drop(file);
+    assert!(load_save_file(&f.primary()).is_err());
+    assert!(write_world_save(&f.primary(), &serde_json::to_vec(&current()).unwrap()).is_err());
+    assert_eq!(
+        fs::metadata(f.primary()).unwrap().len(),
+        MAX_SAVE_BYTES as u64 + 1
+    );
+    assert_eq!(fs::read(f.backup()).unwrap(), backup);
+    assert!(!f.primary().with_extension("json.tmp").exists());
+    assert_eq!(fs::read_dir(&f.0).unwrap().count(), 2);
+}
+
+#[test]
+fn oversized_backup_and_new_save_fail_before_rotation() {
+    let f = Fixture::new();
+    let file = fs::File::create(f.backup()).unwrap();
+    file.set_len(MAX_SAVE_BYTES as u64 + 1).unwrap();
+    drop(file);
+    assert!(load_save_file(&f.primary()).is_err());
+    f.write(&f.primary(), &current());
+    let original = fs::read(f.primary()).unwrap();
+    let oversized = vec![b' '; MAX_SAVE_BYTES + 1];
+    assert!(decode_save(&oversized).is_err());
+    assert!(write_world_save(&f.primary(), &oversized).is_err());
+    assert_eq!(fs::read(f.primary()).unwrap(), original);
+    assert_eq!(
+        fs::metadata(f.backup()).unwrap().len(),
+        MAX_SAVE_BYTES as u64 + 1
+    );
+    assert!(!f.primary().with_extension("json.tmp").exists());
+}
+
+#[test]
+fn bounded_serialization_accepts_exact_limit_and_rejects_extra_bytes() {
+    let mut writer = LimitedSaveWriter {
+        bytes: Vec::new(),
+        limit: 3,
+    };
+    serde_json::to_writer(&mut writer, &123).unwrap();
+    assert_eq!(writer.bytes, b"123");
+    assert!(writer.write_all(b"4").is_err());
+    assert_eq!(writer.bytes, b"123");
+    let mut too_small = LimitedSaveWriter {
+        bytes: Vec::new(),
+        limit: 2,
+    };
+    assert!(serde_json::to_writer(&mut too_small, &123).is_err());
+    assert!(too_small.bytes.len() <= 2);
+}
