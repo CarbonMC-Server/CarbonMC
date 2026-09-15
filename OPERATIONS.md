@@ -112,3 +112,9 @@ Automated coverage includes threshold boundaries, maximum output size, an indepe
 The prototype JSON world save has a hard 16 MiB limit. Loading checks both the opened file's metadata and the actual bytes read; primary and backup reads are bounded. An oversized primary fails closed without falling back to its backup, quarantining it or changing any save file. An oversized backup fails when recovery requires it. Serialization is also bounded before creating a temporary file or rotating the primary/backup.
 
 If saving exceeds this limit, the existing disk snapshot remains unchanged and newer in-memory progress is not committed. Treat the reported save error as an operational failure. Keep the current process and prior backups intact while arranging a supported export/storage upgrade; do not delete the primary to bypass the limit. This byte limit does not bound all live world data, JSON parser overhead, administrative files or storage usage, and does not establish production storage safety.
+
+### Single-writer data directory
+
+Carbon acquires an exclusive operating-system lock on `.carbon-data.lock` in its working data directory before loading saves, initializing extensions or starting network tasks. A second Carbon process using that directory fails at startup even on a different port. The lock remains held through shutdown and the final save, and the operating system releases it when the process exits or is killed.
+
+The empty lock file intentionally remains on disk. Its presence alone does not mean a server is running; do not delete, rename or replace it while Carbon is running, because that can break mutual exclusion. Separate data directories can run independently. This protects cooperating Carbon processes on filesystems with working exclusive-lock support; it does not prevent unrelated software from modifying files, establish network-filesystem guarantees or replace power-loss testing.

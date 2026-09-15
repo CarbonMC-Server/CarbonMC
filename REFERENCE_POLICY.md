@@ -1,5 +1,9 @@
 # Reference and licensing policy
 
+## Review on 2026-09-15: single-writer startup guard
+
+The data-directory guard and process-crash tests were independently written against Carbon runtime ownership. The fs2 0.4.3 file-locking API provides platform-specific exclusive locks through a safe interface. No external server implementation, assets or tests were copied. New dependency notices are collected by the existing release packager. Locking scope is cooperating processes on supported local filesystems; no broader storage-safety claim is made.
+
 ## Review on 2026-09-15: bounded world-save I/O
 
 Read limits, bounded serialization and preservation tests were independently implemented from Carbon persistence APIs using existing standard-library and serde interfaces. No external server source, assets or tests were copied; no dependency was added. The 16 MiB cap is a prototype operational limit, not production storage acceptance.

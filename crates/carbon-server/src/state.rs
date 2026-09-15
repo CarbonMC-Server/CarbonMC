@@ -33,6 +33,7 @@ use crate::world::PrototypeWorld;
 use crate::{NAME, VERSION};
 
 pub struct ServerState {
+    data_lock: Option<crate::data_lock::DataLock>,
     tick: AtomicU64,
     players: RwLock<Vec<PlayerSnapshot>>,
     player_transforms: RwLock<HashMap<Uuid, PlayerTransform>>,
@@ -201,6 +202,9 @@ struct SavedStack {
 }
 
 impl ServerState {
+    pub(crate) fn retain_data_lock(&mut self, lock: crate::data_lock::DataLock) {
+        self.data_lock = Some(lock);
+    }
     fn collapse_nether_portal_near(
         &self,
         dimension: DimensionKind,
@@ -678,6 +682,7 @@ impl ServerState {
         access: AccessLists,
     ) -> Self {
         Self {
+            data_lock: None,
             tick: AtomicU64::new(0),
             players: RwLock::new(Vec::new()),
             player_transforms: RwLock::new(HashMap::new()),

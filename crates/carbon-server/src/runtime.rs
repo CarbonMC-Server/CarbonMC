@@ -34,13 +34,16 @@ impl CarbonServer {
 
     pub async fn run(self) -> anyhow::Result<()> {
         self.config.validate()?;
+        let data_lock = crate::data_lock::DataLock::acquire(&std::env::current_dir()?)?;
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
-        let state = Arc::new(ServerState::with_operator_file(
+        let mut initial_state = ServerState::with_operator_file(
             self.config.world.name.clone(),
             self.config.world.seed,
             shutdown_tx,
             PathBuf::from("operators.json"),
-        )?);
+        )?;
+        initial_state.retain_data_lock(data_lock);
+        let state = Arc::new(initial_state);
         let api: Arc<dyn ServerApi> = state.clone();
 
         let commands = CommandRegistry::default();
