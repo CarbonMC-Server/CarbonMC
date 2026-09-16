@@ -1,4 +1,4 @@
-# Carbon
+# CarbonMC
 
 Carbon is an in development (beta) Minecraft server platform written in stable Rust. Its goal is a fast, extensible server, evaluated against Minecraft server software across implementation languages—not only Rust projects. Carbon is developed as an **original implementation**: its policy prohibits copying, translating, or closely adapting another server’s implementation, whether written in Java, Rust, C++, Go, or any other language. Other projects may inform high-level requirements and interoperability checks; Carbon code and tests are independently designed. See [REFERENCE_POLICY.md](REFERENCE_POLICY.md).
 
