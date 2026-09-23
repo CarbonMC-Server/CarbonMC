@@ -58,7 +58,25 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
-          assert Path('dist/first/SHA256SUMS').read_bytes() == Path('dist/second/SHA256SUMS').read_bytes(), 'Independent build archives differ'
+          import hashlib, zipfile
+          first, second = Path('dist/first'), Path('dist/second')
+          if (first / 'SHA256SUMS').read_bytes() != (second / 'SHA256SUMS').read_bytes():
+              for path in first.glob('*.zip'):
+                  with zipfile.ZipFile(path) as a, zipfile.ZipFile(second / path.name) as b:
+                      for name in sorted(set(a.namelist()) | set(b.namelist())):
+                          left = a.read(name) if name in a.namelist() else b''
+                          right = b.read(name) if name in b.namelist() else b''
+                          if left == right:
+                              continue
+                          print('Different member:', name, len(left), len(right), flush=True)
+                          # Bounded context exposes embedded build paths without
+                          # uploading non-reproducible packages as review artifacts.
+                          import re
+                          for label, data in [('first', left), ('second', right)]:
+                              paths = [v.decode('ascii', 'replace') for v in re.findall(rb'[ -~]{12,}', data)
+                                       if b'build-first' in v or b'build-second' in v]
+                              print(label, 'embedded build paths:', paths[:20], flush=True)
+              raise AssertionError('Independent build archives differ')
       - uses: actions/upload-artifact@v4
         with:
           name: carbon-${{ matrix.target }}
