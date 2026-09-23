@@ -58,7 +58,7 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
-          import hashlib, zipfile
+          import zipfile
           first, second = Path('dist/first'), Path('dist/second')
           if (first / 'SHA256SUMS').read_bytes() != (second / 'SHA256SUMS').read_bytes():
               for path in first.glob('*.zip'):

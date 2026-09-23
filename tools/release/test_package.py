@@ -4,11 +4,24 @@ from unittest.mock import patch
 from pathlib import Path
 import zipfile
 
-from package import SOURCE_FILES, archive, canonical, sha, source_files
+from package import SOURCE_FILES, archive, canonical, sha, source_files, native_build_environment
 from smoke import unpack, verify_files
 
 
 class PackageTests(unittest.TestCase):
+    def test_native_build_defaults_are_independent_of_output_directory(self):
+        with patch.dict('os.environ', {'CFLAGS': '-O2', 'RUSTFLAGS': 'old'}, clear=True):
+            for target in ['x86_64-unknown-linux-gnu', 'x86_64-pc-windows-gnullvm',
+                           'x86_64-pc-windows-msvc']:
+                env = native_build_environment(target)
+                self.assertNotIn('RUSTFLAGS', env)
+                self.assertEqual(env['SOURCE_DATE_EPOCH'], '315532800')
+                self.assertTrue(env['CFLAGS'].startswith('-O2 '))
+                self.assertIn('openssl_paths.h', env['CFLAGS'])
+                self.assertIn('/FI"' if target.endswith('msvc') else '-include "', env['CFLAGS'])
+                self.assertNotIn('build-first', env['CFLAGS'])
+                self.assertNotIn('build-second', env['CFLAGS'])
+
     def test_archive_is_identical_regardless_of_input_order(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

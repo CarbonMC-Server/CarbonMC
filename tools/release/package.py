@@ -37,7 +37,7 @@ def source_files():
     for directory in SOURCE_ROOTS:
         for path in (ROOT / directory).rglob('*'):
             if path.is_file() and '__pycache__' not in path.parts:
-                if path.suffix not in {'.rs', '.toml', '.lock', '.bin', '.md', '.yml', '.yaml', '.py', '.sh', '.cmd'}:
+                if path.suffix not in {'.rs', '.toml', '.lock', '.bin', '.md', '.yml', '.yaml', '.py', '.sh', '.cmd', '.h'}:
                     raise ValueError(f'Unexpected source input: {path}')
                 files.add(path.relative_to(ROOT).as_posix())
     for name in files:
@@ -56,6 +56,19 @@ def archive(path, members):
             mode = 0o755 if name.endswith('/carbon') or name.endswith('.sh') else 0o644
             info.external_attr = (0o100000 | mode) << 16
             output.writestr(info, data)
+
+
+def native_build_environment(target):
+    env = os.environ.copy()
+    env.pop('RUSTFLAGS', None)
+    env['SOURCE_DATE_EPOCH'] = '315532800'
+    # Forced includes run after command-line -D definitions. This avoids
+    # embedding openssl-src's per-build installation prefix in libcrypto,
+    # without patching dependency sources or reusing native build outputs.
+    header = (ROOT / 'tools/release/openssl_paths.h').as_posix()
+    option = f'/FI"{header}"' if target.endswith('msvc') else f'-include "{header}"'
+    env['CFLAGS'] = (env.get('CFLAGS', '') + ' ' + option).strip()
+    return env
 
 
 def main():
@@ -103,10 +116,7 @@ def main():
         flags += ['-C', 'target-feature=+crt-static', '-C', 'link-arg=-static', '-C', 'link-arg=-Wl,--no-insert-timestamp', '-C', 'link-arg=-Wno-unused-command-line-argument']
     else:
         flags += ['-C', 'link-arg=-Wl,--build-id=none']
-    env = os.environ.copy()
-    env.pop('RUSTFLAGS', None)
-    # Stable native-library build timestamp, matching the ZIP epoch.
-    env['SOURCE_DATE_EPOCH'] = '315532800'
+    env = native_build_environment(target)
     env['CARGO_ENCODED_RUSTFLAGS'] = '\x1f'.join(flags)
     subprocess.run(['cargo', 'build', '--release', '--locked', '--bin', 'carbon',
                     '--target', target, '--target-dir', str(build_dir)], cwd=ROOT, env=env, check=True)
