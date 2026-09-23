@@ -118,6 +118,16 @@ def main():
     invoke([str(launcher)], commands='stop\n', expected='server stopped cleanly')
     assert json.loads(save.read_text())['generator_version'] == 1
     assert list(bundle.glob('world-save.json.corrupt-*'))
+    # The native crypto provider must initialize from the extracted package
+    # with no compiler/toolchain DLLs on PATH. This does not contact Mojang or
+    # claim licensed-client authentication acceptance.
+    offline_config = config.read_bytes()
+    config.write_bytes(offline_config.replace(b'online_mode = false', b'online_mode = true'))
+    try:
+        output = invoke([str(launcher)], commands='stop\n', expected='server stopped cleanly')
+        assert 'network listener ready' in output, 'Online authentication did not initialize'
+    finally:
+        config.write_bytes(offline_config)
     save_report = run_save_acceptance(bundle, run, env)
     report = {'save_acceptance': save_report['status'], 'platform': platform.platform(), 'package': packages[0], 'archive_sha256': sums[packages[0]],
               'build': info, 'file_count': len(manifest), 'checks': checks,

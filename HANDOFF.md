@@ -11,3 +11,5 @@ GitHub: origin is CarbonMC-Server/CarbonMC, main is unprotected with no PR requi
 Next task: start with the linked CI results, then arrange licensed-client authentication/reconnect and two-client gameplay acceptance in disposable worlds. Do not mark real Mojang sessions, signed chat, skins, public-server security, or broader release gates complete from synthetic loopback tests. No further gameplay milestone was started.
 
 Native path-fix follow-up: the first correction hit cc-rs literal-quote parsing in CFLAGS. Packaging now enables CC_SHELL_ESCAPED_FLAGS so the forced header is parsed correctly; use the newest commit CI, not the linked earlier attempt, for final release acceptance.
+
+Package smoke now also enables online mode on an ephemeral loopback listener, requires successful authentication initialization, and stops cleanly with the toolchain removed from PATH. This checks the shipped native crypto provider, not a real account session.
