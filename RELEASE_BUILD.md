@@ -53,3 +53,10 @@ The regression fixtures also resolve their temporary root to match production pa
 ## Save acceptance baseline — verified 2026-09-11
 
 Commit `96963773dde6102baeab793f556fc69bfef3dca3` passed [release validation run 34498092749](https://github.com/CarbonMC-Server/CarbonMC/actions/runs/34498092749), including native Windows MSVC/Linux GNU builds, exact independent archive comparisons, and both fresh-job smoke checks. Each package passed all 17 non-empty save migration/restore/crash checks in addition to seven package checks. See SAVE_COMPATIBILITY.md for the executable/archive hashes and acceptance details. Gate 4 still requires actual power-loss evidence; gates 1 and 3 remain open.
+
+
+## Encrypted-login native build validation — 2026-09-23
+
+The authentication dependency introduced compiled OpenSSL installation directories and, on MSVC, absolute error-source filenames. Diagnostic run 35826868726 confirmed differences in the executable and FILES.sha256 while source archives matched. The correction at 09a4c8e uses an independently authored forced-include header for stable runtime-directory macros and OPENSSL_NO_FILENAMES, plus the fixed native build timestamp. Dependencies still compile independently in each build directory; neither native outputs nor executables are normalized after building. Exact archive equality remains required.
+
+The [native validation run](https://github.com/CarbonMC-Server/CarbonMC/actions/runs/35860056355) records both independent build comparisons and fresh-job Windows/Linux package smoke/save checks for that correction. Its result, rather than the earlier historical baseline, determines whether these new native dependencies satisfy the build gate. The [standard CI run](https://github.com/CarbonMC-Server/CarbonMC/actions/runs/35860056345) records formatting, compilation, lint and workspace tests. No public release or licensed-client acceptance is implied.
