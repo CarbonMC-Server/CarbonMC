@@ -649,13 +649,13 @@ pub(super) fn parse_ban_duration(value: &str) -> Option<u64> {
 }
 
 fn format_duration(seconds: u64) -> String {
-    if seconds % 604_800 == 0 {
+    if seconds.is_multiple_of(604_800) {
         format!("{}w", seconds / 604_800)
-    } else if seconds % 86_400 == 0 {
+    } else if seconds.is_multiple_of(86_400) {
         format!("{}d", seconds / 86_400)
-    } else if seconds % 3_600 == 0 {
+    } else if seconds.is_multiple_of(3_600) {
         format!("{}h", seconds / 3_600)
-    } else if seconds % 60 == 0 {
+    } else if seconds.is_multiple_of(60) {
         format!("{}m", seconds / 60)
     } else {
         format!("{seconds}s")

@@ -105,6 +105,8 @@ def main():
         flags += ['-C', 'link-arg=-Wl,--build-id=none']
     env = os.environ.copy()
     env.pop('RUSTFLAGS', None)
+    # Stable native-library build timestamp, matching the ZIP epoch.
+    env['SOURCE_DATE_EPOCH'] = '315532800'
     env['CARGO_ENCODED_RUSTFLAGS'] = '\x1f'.join(flags)
     subprocess.run(['cargo', 'build', '--release', '--locked', '--bin', 'carbon',
                     '--target', target, '--target-dir', str(build_dir)], cwd=ROOT, env=env, check=True)
@@ -133,6 +135,13 @@ def main():
             members[name] = path.read_bytes()
             if name not in notices:
                 notices.append(name)
+        if package['name'] == 'openssl-src':
+            # The crate's root license covers its build wrapper; the linked
+            # vendored library has its own Apache-2.0 notice in this subtree.
+            path = directory / 'openssl' / 'LICENSE.txt'
+            name = f'licenses/{package["name"]}-{package["version"]}/openssl-LICENSE.txt'
+            members[name] = path.read_bytes()
+            notices.append(name)
         dependencies.append({'name': package['name'], 'version': package['version'],
                              'license': package.get('license'), 'source': package['source'], 'notice_files': notices})
     # Compiler-provided runtime notices, without depending on a rust-docs component.

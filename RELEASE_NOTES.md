@@ -1,6 +1,6 @@
 # Carbon 0.1.0 developer preview — documentation baseline 2026-09-06
 
-> Experimental, offline-only gameplay for local or explicitly trusted networks. Account identities are not authenticated. Do not expose this build to the internet or use valuable production worlds. This document is not a public release announcement.
+> Experimental gameplay for local or explicitly trusted networks. Supplied offline mode does not authenticate identities; encrypted online mode is experimental pending licensed-client acceptance. Do not expose this build to the internet or use valuable production worlds. This document is not a public release announcement.
 
 This describes the current source snapshot, not a tagged or published binary release. The package version remains 0.1.0; identify builds by source revision when available and executable SHA-256 because that version alone does not distinguish milestones.
 
@@ -16,7 +16,7 @@ Back up the complete stopped data directory, configuration, and old binary indep
 
 ## Known limitations
 
-- Bounded packet compression is implemented. Secure online authentication/encryption and signed-chat verification/reporting are incomplete. `online_mode = true` refuses gameplay login; it does not enable a secure playable server.
+- Bounded packet compression is implemented. `online_mode = true` implements encrypted login and Mojang session verification. Licensed-client acceptance, skin/property verification and signed-chat verification/reporting remain outstanding; this does not establish public-server readiness.
 - No production durability guarantee, chunk/region persistence, historical generators, multi-writer exclusion, or comprehensive persistence fuzzing. A backup is one rotating generation; separate snapshots are necessary.
 - No full vanilla terrain, fluid simulation, falling-block physics, End progression, redstone/gameplay parity, or complete specialized containers. Lava has contact/burn damage and lighting but no flow or full fire/extinguishing behavior.
 - Remote skins, combat/animation parity, performance/soak limits, and a recorded two-client acceptance pass remain incomplete. The default player capacity is a setting, not a tested capacity guarantee.

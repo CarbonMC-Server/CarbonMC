@@ -109,6 +109,7 @@ pub(super) struct Connection<S = TcpStream> {
     bytes: Budget,
     decoded_bytes: Budget,
     compression: bool,
+    cipher: Option<super::crypto::StreamCipher>,
 }
 impl<S: AsyncRead + AsyncWrite + Unpin> Connection<S> {
     pub(super) fn new(stream: S) -> Self {
@@ -124,10 +125,17 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Connection<S> {
             bytes: Budget::new(MAX_PACKET_SIZE + 5, 1024 * 1024),
             decoded_bytes: Budget::new(MAX_PACKET_SIZE, 1024 * 1024),
             compression: false,
+            cipher: None,
         }
     }
     pub(super) fn observe_shutdown(&mut self, shutdown: tokio::sync::watch::Receiver<bool>) {
         self.shutdown = Some(shutdown);
+    }
+    pub(super) fn setup_deadline(&self) -> Instant {
+        self.setup_deadline.unwrap_or_else(Instant::now)
+    }
+    pub(super) fn shutdown_receiver(&self) -> Option<tokio::sync::watch::Receiver<bool>> {
+        self.shutdown.clone()
     }
     pub(super) fn enter_play(&mut self) {
         self.setup_deadline = None;
@@ -135,6 +143,13 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Connection<S> {
     fn deadline(&self, normal: Instant) -> Instant {
         self.setup_deadline
             .map_or(normal, |setup| setup.min(normal))
+    }
+    pub(super) fn enable_encryption(&mut self, secret: &[u8; 16]) -> io::Result<()> {
+        if self.cipher.is_some() || !self.prefix.is_empty() || !self.payload.is_empty() {
+            return Err(io::Error::other("invalid encryption state transition"));
+        }
+        self.cipher = Some(super::crypto::StreamCipher::new(secret)?);
+        Ok(())
     }
     pub(super) async fn enable_compression(&mut self) -> io::Result<()> {
         if self.compression || !self.prefix.is_empty() || !self.payload.is_empty() {
@@ -152,6 +167,15 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Connection<S> {
         let bytes = if self.compression {
             encoded = super::compression::encode_frames(bytes)?;
             encoded.as_slice()
+        } else {
+            bytes
+        };
+        // Writes are terminal on timeout/cancellation: callers must close the
+        // connection because cipher state has already consumed the whole buffer.
+        let encrypted;
+        let bytes = if let Some(cipher) = &mut self.cipher {
+            encrypted = cipher.encrypt(bytes)?;
+            encrypted.as_slice()
         } else {
             bytes
         };
@@ -198,6 +222,9 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Connection<S> {
                 if !self.bytes.take(count) {
                     return Err(io::Error::other("inbound byte rate exceeded").into());
                 }
+                if let Some(cipher) = &mut self.cipher {
+                    cipher.decrypt(&mut byte)?;
+                }
                 self.prefix.push(byte[0]);
                 if byte[0] & 0x80 != 0 {
                     if self.prefix.len() == 5 {
@@ -231,6 +258,9 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Connection<S> {
             if count == 0 {
                 return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
             }
+            if let Some(cipher) = &mut self.cipher {
+                cipher.decrypt(&mut self.payload[self.received..self.received + count])?;
+            }
             self.received += count;
             if !self.bytes.take(count) {
                 return Err(io::Error::other("inbound byte rate exceeded").into());
@@ -256,7 +286,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Connection<S> {
     }
 }
 
-async fn stopped(shutdown: &mut Option<tokio::sync::watch::Receiver<bool>>) {
+pub(super) async fn stopped(shutdown: &mut Option<tokio::sync::watch::Receiver<bool>>) {
     if let Some(shutdown) = shutdown {
         let _ = shutdown.wait_for(|stopping| *stopping).await;
     } else {
@@ -282,6 +312,57 @@ mod tests {
     use super::*;
     use tokio::io::duplex;
     use tokio::time::{advance, timeout};
+
+    #[tokio::test(start_paused = true)]
+    async fn encrypted_cancelled_reads_preserve_cipher_and_frame_state() {
+        let (mut peer, socket) = duplex(4096);
+        let mut connection = Connection::new(socket);
+        let secret = [19; 16];
+        connection.enable_encryption(&secret).unwrap();
+        assert!(connection.enable_encryption(&secret).is_err());
+        let mut cipher = super::super::crypto::StreamCipher::new(&secret).unwrap();
+        let mut plain = carbon_protocol::frame_packet(7, &[42; 256]);
+        plain.extend(carbon_protocol::frame_packet(8, &[]));
+        let wire = cipher.encrypt(&plain).unwrap();
+        peer.write_all(&wire[..1]).await.unwrap();
+        assert!(timeout(Duration::from_secs(1), connection.read_frame())
+            .await
+            .is_err());
+        peer.write_all(&wire[1..53]).await.unwrap();
+        assert!(timeout(Duration::from_secs(1), connection.read_frame())
+            .await
+            .is_err());
+        peer.write_all(&wire[53..]).await.unwrap();
+        assert_eq!(
+            connection.read_frame().await.unwrap(),
+            [vec![7], vec![42; 256]].concat()
+        );
+        assert_eq!(connection.read_frame().await.unwrap(), vec![8]);
+        connection.write_all(&plain).await.unwrap();
+        let mut received = vec![0; plain.len()];
+        peer.read_exact(&mut received).await.unwrap();
+        cipher.decrypt(&mut received).unwrap();
+        assert_eq!(received, plain);
+    }
+
+    #[tokio::test]
+    async fn encryption_wraps_compression_in_both_directions() {
+        let (peer, socket) = duplex(8192);
+        let mut server = Connection::new(socket);
+        let mut client = Connection::new(peer);
+        for connection in [&mut server, &mut client] {
+            connection.enable_encryption(&[25; 16]).unwrap();
+        }
+        server.enable_compression().await.unwrap();
+        assert_eq!(client.read_frame().await.unwrap(), [3, 0x80, 2]);
+        client.compression = true;
+        let framed = carbon_protocol::frame_packet(7, &[99; 2048]);
+        let expected = [vec![7], vec![99; 2048]].concat();
+        server.write_all(&framed).await.unwrap();
+        assert_eq!(client.read_frame().await.unwrap(), expected);
+        client.write_all(&framed).await.unwrap();
+        assert_eq!(server.read_frame().await.unwrap(), expected);
+    }
 
     #[tokio::test(start_paused = true)]
     async fn compression_transition_preserves_partial_reads_and_charges_expansion() {

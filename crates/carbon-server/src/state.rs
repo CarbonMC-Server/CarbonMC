@@ -833,7 +833,7 @@ impl ServerState {
             .read()
             .unwrap_or_else(|error| error.into_inner())
             .mobs();
-        if tick % 20 == 0 {
+        if tick.is_multiple_of(20) {
             for player in players.iter() {
                 for mob in &mobs {
                     if mob.kind != MobKind::Zombie {
@@ -848,7 +848,7 @@ impl ServerState {
                 }
             }
         }
-        if tick % 80 == 0 {
+        if tick.is_multiple_of(80) {
             let mut vitals = self
                 .vitals
                 .write()
@@ -865,7 +865,7 @@ impl ServerState {
             }
         }
         self.tick_status_effects(tick);
-        if tick % 1_600 == 0 {
+        if tick.is_multiple_of(1_600) {
             let mut vitals = self
                 .vitals
                 .write()
@@ -875,7 +875,7 @@ impl ServerState {
                 value.revision = value.revision.saturating_add(1);
             }
         }
-        if tick % 200 == 0 {
+        if tick.is_multiple_of(200) {
             if let Err(error) = self.save() {
                 tracing::warn!(%error, "could not persist world save");
             }
@@ -925,7 +925,7 @@ impl ServerState {
                 } else if water {
                     burning.remove(&id);
                 }
-                if tick % 10 == 0 && burning.get(&id).is_some_and(|until| *until >= tick) {
+                if tick.is_multiple_of(10) && burning.get(&id).is_some_and(|until| *until >= tick) {
                     damage.push((id, if lava { 2.0 } else { 1.0 }));
                 }
             }
@@ -971,7 +971,7 @@ impl ServerState {
                         ),
                         _ => None,
                     };
-                    if interval.is_some_and(|interval| tick % interval == 0) {
+                    if interval.is_some_and(|interval| tick.is_multiple_of(interval)) {
                         periodic.push((*id, effect.kind));
                     }
                     effect.remaining_ticks = effect.remaining_ticks.saturating_sub(1);
@@ -4010,9 +4010,7 @@ fn fuel_burn_ticks(kind: ItemKind) -> u16 {
 }
 
 fn can_accept(slot: Option<ItemStack>, kind: ItemKind) -> bool {
-    slot.map_or(true, |stack| {
-        stack.kind == kind && stack.damage == 0 && stack.count < 64
-    })
+    slot.is_none_or(|stack| stack.kind == kind && stack.damage == 0 && stack.count < 64)
 }
 
 fn take_one(slot: &mut Option<ItemStack>) {

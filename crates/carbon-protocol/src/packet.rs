@@ -181,7 +181,7 @@ pub fn encode_login_finished(
     // ByteBufCodecs.GAME_PROFILE: UUID, player name, property map.
     payload.extend_from_slice(&profile_id);
     payload.extend_from_slice(&encode_string(username));
-    encode_varint(0, &mut payload); // Empty profile-property map in offline mode.
+    encode_varint(0, &mut payload); // Texture properties are not yet verified or forwarded.
     payload.extend_from_slice(&session_id);
     frame_packet(CLIENTBOUND_LOGIN_FINISHED_ID, &payload)
 }
@@ -542,5 +542,80 @@ mod tests {
                 limit: 64
             })
         ));
+    }
+}
+
+/// Encrypted shared secret and challenge from a 26.2 login response.
+#[derive(Debug)]
+pub struct EncryptionResponse {
+    pub shared_secret: Vec<u8>,
+    pub challenge: Vec<u8>,
+}
+
+/// Requests account authentication using an RSA SubjectPublicKeyInfo key.
+pub fn encode_encryption_request(public_key: &[u8], challenge: &[u8]) -> Vec<u8> {
+    let mut payload = BytesMut::new();
+    payload.extend(encode_string(""));
+    for value in [public_key, challenge] {
+        encode_varint(
+            i32::try_from(value.len()).expect("bounded server key"),
+            &mut payload,
+        );
+        payload.extend_from_slice(value);
+    }
+    payload.put_u8(1); // Client must authenticate its session.
+    frame_packet(1, &payload)
+}
+
+pub fn decode_encryption_response(packet: &[u8]) -> Result<EncryptionResponse, PacketError> {
+    let mut cursor = Cursor::new(packet);
+    let id = cursor.varint()?;
+    if id != 1 {
+        return Err(PacketError::UnexpectedPacket(id));
+    }
+    fn field(cursor: &mut Cursor<'_>) -> Result<Vec<u8>, PacketError> {
+        let length = cursor.varint()?;
+        if !(1..=512).contains(&length) {
+            return Err(PacketError::InvalidLength(length));
+        }
+        let end = cursor.offset + length as usize;
+        let value = cursor
+            .data
+            .get(cursor.offset..end)
+            .ok_or(PacketError::UnexpectedEnd)?
+            .to_vec();
+        cursor.offset = end;
+        Ok(value)
+    }
+    let shared_secret = field(&mut cursor)?;
+    let challenge = field(&mut cursor)?;
+    if !cursor.is_empty() {
+        return Err(PacketError::TrailingBytes);
+    }
+    Ok(EncryptionResponse {
+        shared_secret,
+        challenge,
+    })
+}
+
+#[cfg(test)]
+mod encryption_tests {
+    use super::*;
+    #[test]
+    fn encryption_request_layout_and_response_bounds() {
+        assert_eq!(
+            encode_encryption_request(&[2, 3], &[4]),
+            [8, 1, 0, 2, 2, 3, 1, 4, 1]
+        );
+        let valid = [1, 2, 8, 9, 1, 7];
+        let response = decode_encryption_response(&valid).unwrap();
+        assert_eq!(response.shared_secret, [8, 9]);
+        assert_eq!(response.challenge, [7]);
+        for length in 0..valid.len() {
+            assert!(decode_encryption_response(&valid[..length]).is_err());
+        }
+        assert!(decode_encryption_response(&[1, 0]).is_err());
+        assert!(decode_encryption_response(&[1, 0x81, 4]).is_err());
+        assert!(decode_encryption_response(&[1, 2, 8, 9, 1, 7, 0]).is_err());
     }
 }

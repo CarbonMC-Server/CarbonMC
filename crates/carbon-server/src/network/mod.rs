@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod adversarial_tests;
+mod auth;
 mod compression;
+mod crypto;
 mod keepalive;
 mod transport;
 use transport::{Admissions, Budget, Connection};
@@ -63,8 +65,18 @@ pub async fn serve(
     state: Arc<dyn ServerApi>,
     mut shutdown: watch::Receiver<bool>,
 ) -> anyhow::Result<()> {
+    let authentication = if config.online_mode {
+        match auth::Authentication::new().await {
+            Ok(authentication) => Some(Arc::new(authentication)),
+            Err(error) => {
+                state.request_shutdown();
+                return Err(error.context("authentication initialization failed"));
+            }
+        }
+    } else {
+        None
+    };
     info!(address = %config.bind, "network listener ready");
-
     let admissions = Admissions::default();
     let mut attempts = Budget::new(128, 64);
     let mut tasks = JoinSet::new();
@@ -76,11 +88,12 @@ pub async fn serve(
                 if tasks.len() >= transport::MAX_CONNECTIONS || !attempts.take(1) { continue; }
                 let Some(admission) = admissions.acquire(remote.ip()) else { continue; };
                 let config = config.clone();
+                let authentication = authentication.clone();
                 let state = Arc::clone(&state);
                 let connection_shutdown = shutdown.clone();
                 tasks.spawn(async move {
                     let _admission = admission;
-                    if let Err(error) = handle_connection(stream, remote, config, state, connection_shutdown).await {
+                    if let Err(error) = handle_connection(stream, remote, config, state, connection_shutdown, authentication).await {
                         debug!(%remote, %error, "connection closed");
                     }
                 });
@@ -110,6 +123,7 @@ async fn handle_connection(
     config: ServerConfig,
     state: Arc<dyn ServerApi>,
     shutdown: watch::Receiver<bool>,
+    authentication: Option<Arc<auth::Authentication>>,
 ) -> anyhow::Result<()> {
     let mut stream = Connection::new(stream);
     stream.observe_shutdown(shutdown);
@@ -130,7 +144,14 @@ async fn handle_connection(
             .await
         }
         NextState::Login => {
-            handle_login(&mut stream, handshake.protocol_version, &config, state).await
+            handle_login(
+                &mut stream,
+                handshake.protocol_version,
+                &config,
+                state,
+                authentication.as_deref(),
+            )
+            .await
         }
         NextState::Transfer => {
             disconnect_login(&mut stream, "Server transfer is not implemented yet.").await
@@ -185,6 +206,7 @@ async fn handle_login(
     client_protocol: i32,
     config: &ServerConfig,
     state: Arc<dyn ServerApi>,
+    authentication: Option<&auth::Authentication>,
 ) -> anyhow::Result<()> {
     if client_protocol != PROTOCOL_VERSION {
         return disconnect_login(
@@ -197,33 +219,39 @@ async fn handle_login(
     }
 
     let packet = stream.read_frame().await?;
-    let login = decode_login_start(&packet)?;
+    let mut login = decode_login_start(&packet)?;
     debug!(
         username = %login.username,
         player_id = %format_player_id(login.player_id),
         "validated Minecraft 26.2 login start"
     );
 
-    if config.online_mode {
-        return disconnect_login(
-            stream,
-            "Carbon parsed your Minecraft 26.2 login. Secure online-mode authentication is not implemented yet; use offline mode only on a trusted development network.",
-        )
-        .await;
-    }
+    let profile_id = if config.online_mode {
+        let authentication = authentication.context("online authentication was not initialized")?;
+        let deadline = stream.setup_deadline();
+        let mut shutdown = stream.shutdown_receiver();
+        let profile = tokio::select! {
+            biased;
+            _ = transport::stopped(&mut shutdown) => bail!("server stopping"),
+            result = time::timeout_at(deadline, authentication.login(stream, &login)) => result.context("authentication deadline exceeded")??,
+        };
+        login.username = profile.name;
+        *Uuid::parse_str(&profile.id)?.as_bytes()
+    } else {
+        offline_player_id(&login.username)
+    };
 
     if let Some(reason) = login_denial(config, state.as_ref(), &login.username) {
         return disconnect_login(stream, &reason).await;
     }
 
     stream.enable_compression().await?;
-    let profile_id = offline_player_id(&login.username);
     let mut connection_state = ConnectionState::Login;
     let session_id = *uuid::Uuid::new_v4().as_bytes();
     debug!(
         username = %login.username,
         state = ?connection_state,
-        "sending offline-mode Login Finished"
+        "sending Login Finished"
     );
     stream
         .write_all(&encode_login_finished(
@@ -540,9 +568,7 @@ fn play_command_allowed(state: &dyn ServerApi, username: &str, label: &str) -> b
     }
     PLAY_COMMANDS.iter().any(|(name, permission)| {
         *name == label
-            && permission.map_or(true, |permission| {
-                state.has_permission(username, permission)
-            })
+            && permission.is_none_or(|permission| state.has_permission(username, permission))
     })
 }
 
@@ -3582,7 +3608,7 @@ fn block_drop_at(
     roll = roll.wrapping_mul(0xbf58_476d_1ce4_e5b9);
     roll ^= roll >> 27;
     Some(ItemStack {
-        kind: if roll % 10 == 0 {
+        kind: if roll.is_multiple_of(10) {
             ItemKind::Flint
         } else {
             ItemKind::Gravel

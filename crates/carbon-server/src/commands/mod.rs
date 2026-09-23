@@ -149,7 +149,7 @@ fn command_allowed(
                 && command
                     .permission
                     .as_deref()
-                    .map_or(true, |permission| server.has_permission(name, permission))
+                    .is_none_or(|permission| server.has_permission(name, permission))
         }
     }
 }

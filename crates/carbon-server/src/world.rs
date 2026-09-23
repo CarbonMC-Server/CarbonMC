@@ -161,7 +161,7 @@ impl GeneratedChunk {
                 }
                 let patch = value_noise(seed as u64 ^ 0x706c_616e_7473, x, z, 32);
                 let roll = mix(seed as u64 ^ 0x6465_636f_7261, x, z);
-                if patch > -0.3 && roll % spacing == 0 {
+                if patch > -0.3 && roll.is_multiple_of(spacing) {
                     self.blocks.insert(position, kind);
                 }
             }
@@ -189,7 +189,7 @@ impl GeneratedChunk {
         for cell_z in (min_z - 7).div_euclid(32)..=(min_z + 22).div_euclid(32) {
             for cell_x in (min_x - 7).div_euclid(32)..=(min_x + 22).div_euclid(32) {
                 let value = mix(seed as u64 ^ 0xca7e_5eed, cell_x, cell_z);
-                if value % 3 != 0 {
+                if !value.is_multiple_of(3) {
                     continue;
                 }
                 let center_x = cell_x * 32 + 4 + i32::try_from((value >> 8) % 24).unwrap_or(0);
@@ -486,11 +486,11 @@ impl GeneratedChunk {
                 }
                 let patch = value_noise(seed as u64 ^ 0x6e65_7468_6572, x, z, 24);
                 let roll = mix(seed as u64 ^ 0x6465_636f_7261, x, z);
-                if patch > 0.28 && roll % 5 == 0 {
+                if patch > 0.28 && roll.is_multiple_of(5) {
                     self.blocks
                         .insert(BlockPosition { x, y: floor, z }, BlockKind::SoulSand);
                 }
-                if patch < -0.48 && roll % 97 == 0 {
+                if patch < -0.48 && roll.is_multiple_of(97) {
                     let height = 2 + i32::try_from((roll >> 16) % 4).unwrap_or(0);
                     for y in floor + 1..=floor + height {
                         let position = BlockPosition { x, y, z };
@@ -640,7 +640,7 @@ impl GeneratedChunk {
                 } else {
                     continue;
                 };
-                if value % spacing != 0 {
+                if !value.is_multiple_of(spacing) {
                     continue;
                 }
                 let ground = terrain_height(seed, DimensionKind::Overworld, x, z);
@@ -748,7 +748,7 @@ impl GeneratedChunk {
                     cell_x,
                     cell_z,
                 );
-                if value % 4 != 0 {
+                if !value.is_multiple_of(4) {
                     continue;
                 }
                 let x = cell_x * 96 + 24 + i32::try_from((value >> 8) % 48).unwrap_or(0);
@@ -1485,7 +1485,7 @@ impl PrototypeWorld {
         for mob in &mut self.mobs {
             mob.snapshot.on_fire =
                 mob.snapshot.kind == MobKind::Zombie && daylight && !players.is_empty();
-            if mob.snapshot.on_fire && tick % 20 == 0 {
+            if mob.snapshot.on_fire && tick.is_multiple_of(20) {
                 mob.snapshot.health = (mob.snapshot.health - 1.0).max(0.0);
             }
 
@@ -1599,7 +1599,7 @@ impl PrototypeWorld {
             }
         }
         self.items.retain(|item| item.age_ticks < 6_000);
-        if tick % 200 == 0 {
+        if tick.is_multiple_of(200) {
             self.prune_chunk_cache(players);
         }
     }
@@ -1957,7 +1957,7 @@ struct NetherLayer {
 
 fn nether_layer(seed: i64, cell_x: i32, cell_z: i32) -> Option<NetherLayer> {
     let value = mix(seed as u64 ^ 0x6e65_7468_5f6c_6179, cell_x, cell_z);
-    if value % 3 != 0 {
+    if !value.is_multiple_of(3) {
         return None;
     }
     let center = BlockPosition {
@@ -1990,7 +1990,7 @@ fn nether_layer(seed: i64, cell_x: i32, cell_z: i32) -> Option<NetherLayer> {
 
 fn cave_aquifer(seed: i64, cell_x: i32, cell_z: i32) -> Option<CaveAquifer> {
     let value = mix(seed as u64 ^ 0x6171_7569_6665_7273, cell_x, cell_z);
-    if value % 4 != 0 {
+    if !value.is_multiple_of(4) {
         return None;
     }
     Some(CaveAquifer {
@@ -2013,7 +2013,7 @@ fn cave_surface_material(seed: i64, position: BlockPosition) -> Option<BlockKind
 
 fn cave_entrance(seed: i64, cell_x: i32, cell_z: i32) -> Option<CaveEntrance> {
     let value = mix(seed as u64 ^ 0x656e_7472_616e_6365, cell_x, cell_z);
-    if value % 6 != 0 {
+    if !value.is_multiple_of(6) {
         return None;
     }
     let node = cave_network_node(seed, cell_x, cell_z);
@@ -2380,7 +2380,7 @@ fn structure_loot(
                 damage: 0,
             },
             ItemStack {
-                kind: if (roll >> 16) % 4 == 0 {
+                kind: if (roll >> 16).is_multiple_of(4) {
                     ItemKind::Diamond
                 } else {
                     ItemKind::EndStone
@@ -3571,7 +3571,7 @@ mod tests {
                         DimensionKind::Overworld,
                         biome_at(seed, DimensionKind::Overworld, x, z),
                     );
-                    (value % 4 == 0
+                    (value.is_multiple_of(4)
                         && !(x.abs() < 20 && z.abs() < 20)
                         && profile.surface == surface)
                         .then_some((x, z, value))
@@ -3624,7 +3624,7 @@ mod tests {
                     );
                     let x = cell_x * 96 + 24 + i32::try_from((value >> 8) % 48).ok()?;
                     let z = cell_z * 96 + 24 + i32::try_from((value >> 16) % 48).ok()?;
-                    (value % 4 == 0
+                    (value.is_multiple_of(4)
                         && (value >> 24) & 1 == 1
                         && !(x.abs() < 20 && z.abs() < 20)
                         && (dimension != DimensionKind::End
@@ -3699,7 +3699,8 @@ mod tests {
                 let value = mix(seed as u64 ^ 0x57a1_c7e5, cell_x, cell_z);
                 let x = cell_x * 96 + 24 + i32::try_from((value >> 8) % 48).ok()?;
                 let z = cell_z * 96 + 24 + i32::try_from((value >> 16) % 48).ok()?;
-                (value % 4 == 0 && !(x.abs() < 20 && z.abs() < 20)).then_some((x, z, value))
+                (value.is_multiple_of(4) && !(x.abs() < 20 && z.abs() < 20))
+                    .then_some((x, z, value))
             })
             .unwrap();
         let ground = terrain_height(seed, DimensionKind::Overworld, x, z);

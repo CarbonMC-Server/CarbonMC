@@ -11,6 +11,9 @@ name = "carbon"
 path = "src/main.rs"
 
 [dependencies]
+openssl = { version = "0.10.81", features = ["vendored"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+zeroize = "1.8"
 fs2 = "0.4.3"
 flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
 anyhow.workspace = true

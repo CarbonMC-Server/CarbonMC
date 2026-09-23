@@ -1,6 +1,6 @@
 # Preview support scope and bug reports
 
-> Experimental offline development server. Local/trusted networks only; no authenticated identities or production-world guarantees.
+> Experimental development server. Local/trusted networks only; online authentication awaits licensed-client acceptance, and production-world guarantees remain absent.
 
 The current target is Java 26.2 / protocol 776 with the prototype features in [release notes](RELEASE_NOTES.md). There is no promised vanilla/Paper parity, uptime/SLA, supported player-count benchmark, old-save downgrade converter, or third-party plugin compatibility. Windows Server 2022 and Ubuntu 22.04 package validation is recorded in [RELEASE_BUILD.md](RELEASE_BUILD.md); wider OS support is not yet established. Automated checks do not substitute for a two-client gameplay pass.
 

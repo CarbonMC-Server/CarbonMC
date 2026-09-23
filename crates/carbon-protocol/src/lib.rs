@@ -15,10 +15,11 @@ pub use chunk::{
 };
 pub use configuration::{decode_finish_configuration, CONFIGURATION_SNAPSHOT};
 pub use packet::{
-    decode_handshake, decode_login_acknowledged, decode_login_start, decode_select_known_packs,
-    encode_configuration_brand, encode_login_finished, encode_select_known_packs, encode_string,
-    encode_update_enabled_features, frame_packet, read_frame, ConnectionState, Handshake,
-    KnownPack, LoginStart, NextState, PacketError,
+    decode_encryption_response, decode_handshake, decode_login_acknowledged, decode_login_start,
+    decode_select_known_packs, encode_configuration_brand, encode_encryption_request,
+    encode_login_finished, encode_select_known_packs, encode_string,
+    encode_update_enabled_features, frame_packet, read_frame, ConnectionState, EncryptionResponse,
+    Handshake, KnownPack, LoginStart, NextState, PacketError,
 };
 pub use play::{
     decode_attack, decode_chat_command, decode_chat_message, decode_client_command,

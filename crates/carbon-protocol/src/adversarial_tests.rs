@@ -3,6 +3,7 @@ use crate::*;
 
 fn exercise(packet: &[u8]) {
     let _ = decode_varint(packet);
+    let _ = decode_encryption_response(packet);
     let _ = decode_handshake(packet);
     let _ = decode_login_start(packet);
     let _ = decode_login_acknowledged(packet);

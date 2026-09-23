@@ -35,10 +35,10 @@ Release planning: see [RELEASE_READINESS.md](RELEASE_READINESS.md) for five prev
 - **Done:** synchronize the 26.2 configuration registries/tags needed by the vanilla client.
 - **Done:** enter play, stream playable chunks, track joins/leaves, and exchange keep-alives.
 - Add generated packet registries and golden fixtures for every connection state.
-- Implement login encryption and authentication.
+- **Implemented (experimental):** RSA challenge exchange, continuous AES-128-CFB8 transport and bounded HTTPS Mojang session verification bind the canonical account name/UUID before admission. Automated validation and remaining acceptance are recorded in RELEASE_READINESS.md. Licensed-client acceptance, verified skins and signed-chat verification remain open.
 - **Done (compression baseline):** negotiate a 256-byte threshold; independently envelope concatenated frames; enforce wire/decompressed size and rate limits; reject malformed zlib, size mismatches and trailing streams; validate complete login/configuration streaming and an independent zlib fixture.
 - **Done (transport baseline):** bounded global/per-IP connection admission, connection/packet/byte rate budgets, total setup and frame deadlines, write deadlines, cancellation-safe partial framing, and cooperative shutdown cleanup with adversarial transport/loopback tests. Comprehensive decoder/persistence fuzzing and bounds for world/save memory remain open.
-- **Done (decoder/heartbeat baseline):** validate matching keepalive replies and deadlines; reject overflowing integers, empty frames, unsafe login names, and non-finite combined movement rotations; exercise all exported decoders with deterministic malformed inputs. Authenticated login, comprehensive fuzzing and real-client security acceptance remain open.
+- **Done (decoder/heartbeat baseline):** validate matching keepalive replies and deadlines; reject overflowing integers, empty frames, unsafe login names, and non-finite combined movement rotations; exercise all exported decoders with deterministic malformed inputs. Comprehensive fuzzing and real-client security acceptance remain open.
 - Test status compatibility against supported client versions.
 
 ## Phase 2 — playable core

@@ -1,5 +1,15 @@
 # Reference and licensing policy
 
+## Review on 2026-09-21: encrypted account login
+
+Completed the interrupted authentication foundation using independently authored Carbon code/tests; no Pumpkin source, tests or assets were consulted or copied for this continuation. The earlier protocol-field review below remains the interoperability basis. Consulted the [OpenSSL EVP decryption documentation](https://docs.openssl.org/3.5/man3/EVP_PKEY_decrypt/) for default-provider implicit rejection since OpenSSL 3.2. The vendored OpenSSL path avoids introducing the previously identified RustCrypto RSA implementation.
+
+New direct dependencies are openssl (Apache-2.0), reqwest (MIT OR Apache-2.0) and zeroize (Apache-2.0 OR MIT), with locked transitive dependencies. The release notice collector retains their package notices and explicitly includes openssl-src's nested OpenSSL Apache-2.0 license; local tool downloads and probes remain excluded. This scoped implementation review does not close the repository-wide distribution/provenance gate or constitute a side-channel audit. Real Mojang/licensed-client acceptance remains outstanding.
+
+## Review on 2026-09-15: authentication packet foundation
+
+The login encryption request encoder, bounded response decoder and malformed-input tests were independently implemented. The local official 26.2 packet definitions confirm the interoperability fields: empty server identifier, public-key byte array, challenge byte array and authentication flag; the response carries two encrypted byte arrays. No external implementation or fixture was copied. Production dependencies and online-mode behavior are unchanged by this protocol-only foundation; cryptography build probes remain outside release inputs.
+
 ## Review on 2026-09-15: single-writer startup guard
 
 The data-directory guard and process-crash tests were independently written against Carbon runtime ownership. The fs2 0.4.3 file-locking API provides platform-specific exclusive locks through a safe interface. No external server implementation, assets or tests were copied. New dependency notices are collected by the existing release packager. Locking scope is cooperating processes on supported local filesystems; no broader storage-safety claim is made.

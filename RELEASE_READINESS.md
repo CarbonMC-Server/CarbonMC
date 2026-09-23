@@ -1,4 +1,4 @@
-# Release readiness — updated 2026-09-15
+# Release readiness — updated 2026-09-23
 
 ## Status
 
@@ -18,7 +18,7 @@ Gates 2 and 5 are complete for the developer-preview baseline. Gates 1, 3 and 4 
 
 ## Eight major work areas before a production-ready public server
 
-1. **Identity/security:** online-mode encryption and account/session verification, authenticated identities/skins, and a defined signed-chat policy. Currently `online_mode = true` rejects login because secure authentication is unimplemented.
+1. **Identity/security:** online-mode encryption and account/session verification, authenticated identities/skins, and a defined signed-chat policy. `online_mode = true` now performs encrypted challenge exchange and bounded Mojang session verification before admission. This is experimental: licensed-client acceptance, skin/property verification, and signed-chat verification/reporting remain open.
 2. **Protocol and abuse resistance:** connection transport baseline implemented: bounded global/per-IP admission, packet/byte budgets, setup/frame/write deadlines, cancellation-safe reads, validated keepalive replies, strict login-name/number/rotation validation, and adversarial transport/decoder tests. Bounded compression negotiation and full registry-stream transport tests are implemented. World-save reads and serialization now fail closed above 16 MiB; a process-lifetime exclusive data-directory lock prevents concurrent Carbon writers. Comprehensive decoder/persistence fuzzing, broader administrative-file/live-world resource bounds, and broader adversarial/load acceptance remain open. See OPERATIONS.md for enforced limits; this is not completion of production abuse resistance.
 3. **Durable storage and upgrades:** chunk/region storage, async persistence, power-loss/crash testing and broader migration tooling beyond the implemented prototype schema/generator metadata and backup policy.
 4. **World generation:** full 3D biome/decorator rules, fluid/aquifer simulation, richer Nether/End generation, portal progression, structures and loot. Current terrain, cave material regions, static aquifers, islands, and portal fields are original prototypes, not vanilla parity.
@@ -49,3 +49,10 @@ Completion must be demonstrated against a named release commit, supported client
 Prioritize storage acceptance, authenticated networking, abuse resistance, and real-client validation before advertising public-server readiness. Recent gameplay prototypes include variable-size/corner-optional portals, water extinguishing, dimension-aware lava hazards, and Fire Resistance. These do not close the three remaining preview gates.
 
 Save-safety work now includes deterministic process termination at six save-writer stages and a packaged non-empty migration/restore/crash acceptance runner. Native Windows/Linux execution evidence and package hashes are recorded in SAVE_COMPATIBILITY.md. Hardware power-loss acceptance remains a separate unmet requirement; process termination leaves the operating system and disk caches running.
+
+
+## Authentication validation — 2026-09-23
+
+Local Windows gnullvm: formatting, locked workspace/all-target check, strict Clippy, 231 Rust tests (two existing subprocess helpers ignored) and nine Python packaging/save regressions passed. Authentication coverage includes the independent cipher/hash vectors, challenge mismatch/malformed ciphertext, cancellation-safe encrypted framing, compression inside encryption, canonical UUID/name matching, a complete encrypted configuration snapshot, failed-session non-admission, HTTPS-only requests, bounded/invalid/redirect responses, body timeout, capacity release, overall setup deadline and shutdown.
+
+The session service in these tests is synthetic. No successful real Mojang session or licensed-client gameplay acceptance is claimed. Native hosted release validation for this change is pending; previously recorded build baselines remain historical evidence only. See HANDOFF.md for continuation status.

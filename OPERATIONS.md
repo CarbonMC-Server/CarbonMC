@@ -4,7 +4,7 @@
 
 ## Build the current source
 
-Use stable Rust with Cargo and the native compiler/linker required by the Rust toolchain (on Windows, the appropriate C++ build tools for an MSVC toolchain). The first build may need network access for dependencies. No Java runtime or Mojang server jar is required to run Carbon itself; the gameplay client is Minecraft Java 26.2.
+Use stable Rust with Cargo and the native compiler/linker required by the Rust toolchain (on Windows, the appropriate C++ build tools for an MSVC toolchain). Vendored OpenSSL additionally needs Perl and Make (native Strawberry Perl with MSVC/nmake on Windows, MSYS Perl/Make for local gnullvm). Set OPENSSL_SRC_PERL to the matching Perl executable if it is not on PATH. The first build may need network access for dependencies. No Java runtime or Mojang server jar is required to run Carbon itself; the gameplay client is Minecraft Java 26.2.
 
 From the checkout containing Cargo.toml and Cargo.lock:
 
@@ -118,3 +118,14 @@ If saving exceeds this limit, the existing disk snapshot remains unchanged and n
 Carbon acquires an exclusive operating-system lock on `.carbon-data.lock` in its working data directory before loading saves, initializing extensions or starting network tasks. A second Carbon process using that directory fails at startup even on a different port. The lock remains held through shutdown and the final save, and the operating system releases it when the process exits or is killed.
 
 The empty lock file intentionally remains on disk. Its presence alone does not mean a server is running; do not delete, rename or replace it while Carbon is running, because that can break mutual exclusion. Separate data directories can run independently. This protects cooperating Carbon processes on filesystems with working exclusive-lock support; it does not prevent unrelated software from modifying files, establish network-filesystem guarantees or replace power-loss testing.
+
+
+### Experimental account authentication (2026-09-21)
+
+With `online_mode = true`, Carbon requires RSA-2048 encryption of a fresh 16-byte challenge and a 16-byte shared secret, then encrypts both directions continuously with AES-128-CFB8. Compression is negotiated inside encryption. A fixed HTTPS request to Mojang's `hasJoined` endpoint verifies the session hash and both the claimed UUID and case-insensitive name; Carbon uses the returned canonical identity before applying bans, allowlists, capacity and player registration. Client-supplied UUIDs alone are never accepted as proof of ownership. Failed or unavailable verification closes the connection without offline fallback.
+
+Authentication permits at most four concurrent attempts, with no waiting queue; an unfinished RSA worker retains its permit if the connection is cancelled. HTTP redirects and environment proxies are disabled. Connect/request limits are 3/8 seconds, response bodies are capped at 64 KiB even when streamed, and the overall 30-second setup deadline and shutdown cancellation apply. HTTPS uses reqwest's rustls certificate validation. RSA/AES use vendored OpenSSL (minimum runtime version 3.2 for PKCS#1 implicit rejection); package notices include the library license. Build/runtime provider overrides are outside the tested configuration.
+
+No access tokens, account passwords or session response bodies are logged. Profile texture properties are currently ignored, so default skins remain; chat is server-authored system chat without signed-player-chat verification/reporting. Offline mode remains explicit and unauthenticated. Switching identity mode changes player UUIDs and may select different saved inventories/positions; no automatic migration is provided. Name-based operator, ban and allowlist policies remain name-based. Preserve backups and use disposable worlds for acceptance.
+
+Automated loopback verification uses a synthetic local session service, not a real Mojang account. Real licensed-client online login, invalid/expired-session rejection, reconnect and two-client encrypted gameplay still require recorded acceptance. Keep the trusted-network restriction until the other security, storage and release gates are met.
