@@ -68,6 +68,9 @@ def native_build_environment(target):
     header = (ROOT / 'tools/release/openssl_paths.h').as_posix()
     option = f'/FI"{header}"' if target.endswith('msvc') else f'-include "{header}"'
     env['CFLAGS'] = (env.get('CFLAGS', '') + ' ' + option).strip()
+    # cc-rs otherwise splits only on whitespace and passes literal quotes to
+    # the compiler, which fails even when the header path contains no spaces.
+    env['CC_SHELL_ESCAPED_FLAGS'] = '1'
     return env
 
 

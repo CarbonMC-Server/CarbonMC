@@ -15,6 +15,7 @@ class PackageTests(unittest.TestCase):
                            'x86_64-pc-windows-msvc']:
                 env = native_build_environment(target)
                 self.assertNotIn('RUSTFLAGS', env)
+                self.assertEqual(env['CC_SHELL_ESCAPED_FLAGS'], '1')
                 self.assertEqual(env['SOURCE_DATE_EPOCH'], '315532800')
                 self.assertTrue(env['CFLAGS'].startswith('-O2 '))
                 self.assertIn('openssl_paths.h', env['CFLAGS'])
